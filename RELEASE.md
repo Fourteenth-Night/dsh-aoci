@@ -1,4 +1,4 @@
-﻿# 发布清单（Release Notes）
+# 发布清单（Release Notes）
 
 ## 版本历史
 
@@ -18,7 +18,7 @@
 
 - 双面插件：`lib/index.mjs`（host，ESM）、`lib/client.js`（client，`__ModuleLoader__.load` 协议）、`lib/skill/SKILL.md`（aoci-cognition 技能）；
 - 清单文件：`package.json`（含 `dsh` bundle/compatibility/client 声明）、`dsh.plugin.json`、`cordis.patch.yml`；
-- 文档：README.md（中文）、README_EN.md（English）、docs/DESIGN.md（完整方案设计）、RELEASE.md（本文）；
+- 文档：README.md（English，默认展示）、README.zh-CN.md（简体中文）、docs/DESIGN.md（完整方案设计）、RELEASE.md（本文）；
 - 许可：MIT（LICENSE）。
 
 ## 依赖与合规
