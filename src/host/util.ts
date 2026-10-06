@@ -1,6 +1,49 @@
-// 纯函数工具：slug/serverName/凭据引用派生、五段 cron 匹配、UI JSON 解析等（全部可单测）
+// 纯函数工具：slug/serverName/凭据引用派生、五段 cron 匹配、UI JSON 解析、标志解析等（全部可单测）
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import type { McpEntry, ProjectConfig } from './types'
 import { AOCI_MANAGED_ASSETS as AOCI_MANAGED_ASSETS_FILTER } from './types'
+
+/** 解析 /aoci 或 aoci_use 的原始输入：首个 token 为路径，其余为 --key value / --flag */
+export interface AociFlags {
+  path?: string
+  locale?: string
+  scope?: string
+  agent?: string
+  db?: string
+  skipScan?: boolean
+}
+export function parseAociInput(raw: string): AociFlags {
+  const out: AociFlags = {}
+  const tokens = raw.trim().split(/\s+/).filter(Boolean)
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i]!
+    if (t.startsWith('--')) {
+      const key = t.slice(2)
+      if (key === 'skip-scan') out.skipScan = true
+      else if (key === 'locale' || key === 'scope' || key === 'agent' || key === 'db') {
+        const val = tokens[i + 1]
+        if (val && !val.startsWith('--')) { (out as Record<string, string>)[key] = val; i++ }
+      }
+    } else if (!out.path) {
+      out.path = t
+    }
+  }
+  return out
+}
+
+/** 自动探测 aoci 二进制：优先显式配置；否则常见目录与 PATH（不比较版本，保持零开销） */
+export function detectAociBinary(configured?: string): string | undefined {
+  if (configured) return configured
+  for (const c of ['C:/aoci/bin/aoci.exe', 'C:/aoci/aoci.exe']) {
+    try { if (existsSync(c)) return c } catch { /* ignore */ }
+  }
+  for (const p of (process.env.PATH || '').split(';')) {
+    if (!p) continue
+    try { const f = join(p, 'aoci.exe'); if (existsSync(f)) return f } catch { /* ignore */ }
+  }
+  return undefined
+}
 
 /** 服务访问：静态 bundle 直接属性访问 ctx.<name>（服务在组合中存在即可解析；缺失/受限时抛错则降级为 undefined） */
 export function safeGet<T>(obj: unknown, key: string): T | undefined {

@@ -1,6 +1,6 @@
 {
   "name": "dsh-aoci",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "description": "AOCI-CODE cognition layer for DeepSeek Harness: one-shot /aoci command + dynamic MCP bridge for governed, Git-versioned repository/database cognition.",
   "keywords": ["dsh-plugin", "deepseek-harness", "aoci", "aoci-code", "mcp", "model-context-protocol", "code-understanding", "llm", "agent"],
   "repository": { "type": "git", "url": "git+https://github.com/Fourteenth-Night/dsh-aoci.git" },

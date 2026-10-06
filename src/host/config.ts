@@ -25,7 +25,8 @@ export const ProjectSchema = Schema.object({
 
 export const AociConfigSchema = Schema.object({
   defaultRoot: Schema.string().default('').description('相对路径解析基准目录；空表示 aoci_use 需绝对路径'),
-  binaryPath: Schema.string().default('C:/aoci/bin/aoci.exe').description('aoci 稳定绝对路径（不捆绑，需从官方 Release 获取并校验）'),
+  binaryPath: Schema.string().default('C:/aoci/bin/aoci.exe').description('aoci 稳定绝对路径（不捆绑，需从官方 Release 获取并校验；可留空启用自动探测）'),
+  binaryAutoDetect: Schema.boolean().default(true).description('未配置 binaryPath 时自动探测常见目录与 PATH 中的 aoci 二进制'),
   autoInstallOnFirstUse: Schema.boolean().default(true),
   mcp: Schema.object({
     serverNamePrefix: Schema.string().default('aoci'),
@@ -57,6 +58,7 @@ export interface ProjectConfigMin {
 export interface AociConfig {
   defaultRoot?: string
   binaryPath: string
+  binaryAutoDetect?: boolean
   autoInstallOnFirstUse: boolean
   mcp: { serverNamePrefix: string; toolCallTimeoutMs: number; failOnStartupError: boolean }
   projects: ProjectConfigMin[]

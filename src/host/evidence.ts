@@ -50,6 +50,19 @@ export class EvidenceStore {
     })
   }
 
+  async upsertProject(record: ProjectRecord): Promise<void> {
+    // 单层串行 + 底层读写：不得嵌套调用本类的其他 serial 方法（会循环等待）
+    return this.serial(async () => {
+      await fs.mkdir(this.dir, { recursive: true })
+      const file = join(this.dir, 'projects.json')
+      const ledger = await EvidenceStore.readJson<EvidenceLedger>(file, { version: 1, projects: [] })
+      const i = ledger.projects.findIndex((p) => p.slug === record.slug)
+      if (i >= 0) ledger.projects[i] = record
+      else ledger.projects.push(record)
+      await EvidenceStore.atomicWrite(file, JSON.stringify({ version: 1, projects: ledger.projects }, null, 2))
+    })
+  }
+
   async appendRun(run: TaskRun): Promise<void> {
     return this.serial(async () => {
       await fs.mkdir(this.dir, { recursive: true })

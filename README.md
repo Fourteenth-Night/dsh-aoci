@@ -1,4 +1,4 @@
-﻿# dsh-aoci
+# dsh-aoci
 
 **AOCI-CODE cognition layer for DeepSeek Harness: one slash command gives agents governed, Git-versioned repository and database cognition.**
 
@@ -11,8 +11,8 @@
 `dsh-aoci` integrates [AOCI-CODE](https://github.com/aoci-spec/aoci-code) — a local-first stdio MCP server and Go CLI implementing the AOCI (AI-Oriented Cognition Infrastructure) paradigm — into the DeepSeek Harness (DSH) plugin ecosystem. It separates **deterministic governance** (initialisation, baseline establishment, verification) from **semantic authorship** (FRAS entries authored by the model under AOCI's governance protocol), and exposes cognition through three complementary surfaces:
 
 - **Nine MCP tools** (`mcp__aoci-<slug>__aoci_rules` / `aoci_overview` / `aoci_get_entries` / `aoci_search` / `aoci_maintain` / `aoci_update_entry` / `aoci_remove_entry` / `aoci_header` / `aoci_report`), registered **on demand** by a dynamic MCP bridge instead of static per-repository configuration;
-- **Seven deterministic tools** (`aoci_status`, `aoci_verify`, `aoci_check`, `aoci_scan`, `aoci_panel`, `aoci_use`, `aoci_unbind`) for governance, health, and agent-driven repository selection;
-- **One-shot slash command** `/aoci <path>`: resolves the path (absolute, or relative to the `defaultRoot` setting), runs conditional initialisation/baseline, binds the MCP bridge, and submits the index-build instruction to the current agent via `agent.steer` — cognition onboarding in a single invocation.
+- **Eleven deterministic tools** (`aoci_status`, `aoci_verify`, `aoci_check`, `aoci_scan`, `aoci_panel`, `aoci_use`, `aoci_unbind`, `aoci_relations`, `aoci_impact`, `aoci_lineage`, `aoci_db`) for governance, System-Cognition queries, database preflight, and agent-driven repository selection;
+- **One-shot slash command** `/aoci [path]`: with a path, resolves it (absolute, or relative to `defaultRoot`); **without a path, auto-locates the current session’s workspace repository**; runs conditional initialisation/baseline, binds the MCP bridge, and submits the index-build instruction to the current agent via `agent.steer` — cognition onboarding in a single invocation. Optional flags: `--locale`, `--scope`, `--agent`, `--skip-scan`, `--db`.
 
 AOCI-CODE is licensed FSL-1.1-MIT (source-available); this plugin **does not bundle** its binary — it guides checksum-verified downloads from the official release channel.
 
@@ -30,7 +30,9 @@ AOCI-CODE is licensed FSL-1.1-MIT (source-available); this plugin **does not bun
 | Cognition reads | `mcp__aoci-<slug>__aoci_rules`, `...__aoci_overview`, `...__aoci_get_entries`, `...__aoci_search` | Load and query the governed cognition map |
 | Cognition maintenance | `...__aoci_maintain`, `...__aoci_update_entry`, `...__aoci_remove_entry` | Incremental, protocol-governed updates |
 | Cognition evidence | `...__aoci_header`, `...__aoci_report` | Index identity and attestation |
-| Deterministic governance | `aoci_status`, `aoci_verify`, `aoci_check`, `aoci_scan`, `aoci_panel` | Health, verification, baseline, panel |
+| Deterministic governance | `aoci_status`, `aoci_verify`, `aoci_check`, `aoci_scan`, `aoci_panel` | Health, verification, baseline, panel (status also reports git head/working-dirty drift) |
+| System Cognition | `aoci_relations`, `aoci_impact <object>`, `aoci_lineage` | Dependency projection, impact analysis, lineage binding |
+| Database preflight | `aoci_db <source>` | Read-only `database source access` preflight (env-referenced credentials only) |
 | Agent-driven binding | `aoci_use <path>`, `aoci_unbind <slug>` | Autonomous repository selection |
 | Slash command | `/aoci <path>` | One-shot onboarding (bind + instruct agent to build) |
 
@@ -49,7 +51,7 @@ DSH Web GUI (client) ── RPC/HTTP ──▶ DSH Host half (this plugin)
 1. **Dual-face plugin**: the package root is the host (Node) half; the `./client` export is the browser half registered through DSH's `__ModuleLoader__.load` protocol. State ledgers persist under profile-isolated `state/aoci/` (`projects.json`, `runs.jsonl`).
 2. **Dynamic MCP bridge** (`AociBridge`): spawns `aoci --repo <root> mcp` via Node `child_process`, connects `StdioClientTransport` + `Client` from `@modelcontextprotocol/sdk`, discovers the nine tools, and registers them on `ctx.tools`; unbinding unregisters and terminates the process.
 3. **AOCI governance semantics** (empirically fixed): `init` runs only for uninitialised repositories (probe `aoci.txt`); `scan` runs only when no Baseline exists (probe `.aoci/baseline.json`); existing Baselines are maintained via argument-less `aoci_maintain` plus batch `aoci_update_entry`, proven by `verify`/`check`.
-4. **One-shot command**: `/aoci <path>` is registered via `ctx.inject(['commands'], …)` and submits the build instruction through `agent.steer(createUserMessage(...))` — the plan-mode submission pattern.
+4. **One-shot command**: `/aoci [path]` (no-arg auto-locates the current workspace) is registered via `ctx.inject(['commands'], …)` and submits the build instruction through `agent.steer(createUserMessage(...))` — the plan-mode submission pattern.
 5. **Compaction-contract bridge**: `compactAociResults` (pure folding of Whole-Index bodies into receipts) and a `compaction/end` recovery hook (`installAociCompactionGuard`) align AOCI's compaction discipline with DSH session compaction.
 
 ## Installation

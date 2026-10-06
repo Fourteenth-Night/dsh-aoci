@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   slugFromRoot, defaultCredentialEnv, mcpServerName, buildMcpEntry,
-  cronMatch, parsePanelLink, ignoredAociAssets,
+  cronMatch, parsePanelLink, ignoredAociAssets, parseAociInput,
 } from '../src/host/util'
 
 describe('slugFromRoot', () => {
@@ -56,5 +56,20 @@ describe('parsePanelLink', () => {
 describe('ignoredAociAssets', () => {
   it('发现误排除 AOCI 认知资产的行', () => {
     expect(ignoredAociAssets('aoci.txt\n*.code.txt\nnode_modules/').sort()).toEqual(['aoci.code.txt', 'aoci.txt']) // sort 字典序
+  })
+})
+
+describe('parseAociInput', () => {
+  it('解析路径与标志', () => {
+    const f = parseAociInput('D:/code/x --locale zh-CN --scope full --skip-scan --agent claude')
+    expect(f.path).toBe('D:/code/x')
+    expect(f.locale).toBe('zh-CN')
+    expect(f.scope).toBe('full')
+    expect(f.skipScan).toBe(true)
+    expect(f.agent).toBe('claude')
+  })
+  it('无路径返回空对象', () => {
+    expect(parseAociInput('--skip-scan')).toEqual({ skipScan: true })
+    expect(parseAociInput('')).toEqual({})
   })
 })

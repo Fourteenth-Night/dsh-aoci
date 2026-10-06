@@ -8,7 +8,7 @@ import type { ProjectRecord } from './host/types'
 import { EvidenceStore } from './host/evidence'
 import { inspectBinary } from './host/aoci-bin'
 import { isGitRepo, checkIgnoreDiscipline } from './host/workspace'
-import { slugFromRoot, mcpServerName, buildMcpEntry, safeGet } from './host/util'
+import { slugFromRoot, mcpServerName, buildMcpEntry, safeGet, detectAociBinary } from './host/util'
 import { safeLogger } from './host/logger'
 import { installRoutes } from './host/routes'
 import { installTools } from './host/tools'
@@ -92,7 +92,11 @@ export const apply = (ctx: Context, config?: AociConfig) => {
   const bridge = new AociBridge(ctx)
   installTools(ctx, {
     store,
-    binaryPath: async () => (await inspectBinary(cfg.binaryPath)).exists ? cfg.binaryPath : undefined,
+    binaryPath: async () => {
+      const c = cfg.binaryPath
+      if (c && (await inspectBinary(c)).exists) return c
+      return cfg.binaryAutoDetect !== false ? detectAociBinary() : undefined
+    },
     projects: async () => (cfg.projects ?? []).map((p) => ({ root: p.root, slug: slugFromRoot(p.slug || p.root) })),
     openPanel: (slug) => safeLogger(ctx).info('dsh-aoci: 打开面板 ' + slug + '（M2 实现 iframe/反代）'),
     bridge,
