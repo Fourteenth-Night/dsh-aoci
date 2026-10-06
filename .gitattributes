@@ -1,0 +1,25 @@
+# Line-ending normalization for cross-platform checkouts
+* text=auto
+
+# Source & docs: always LF
+*.ts text eol=lf
+*.tsx text eol=lf
+*.mjs text eol=lf
+*.js text eol=lf
+*.cjs text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.ps1 text eol=crlf
+
+# Binaries
+*.tgz binary
+*.png binary
+*.jpg binary
+*.ico binary
+
+# Packaging artifacts (kept out of git, normalized if present)
+lib/ export-ignore
+node_modules/ export-ignore
+*.tgz export-ignore

@@ -1,7 +1,11 @@
 {
   "name": "dsh-aoci",
   "version": "0.1.8",
-  "description": "AOCI 认知层：为 DeepSeek Harness 提供全仓库代码/数据库认知地图（dsh-mcp-client 桥接 + 索引治理 + 只读面板）。基于 AOCI-CODE（github.com/aoci-spec/aoci-code），不捆绑其二进制。",
+  "description": "AOCI-CODE cognition layer for DeepSeek Harness: one-shot /aoci command + dynamic MCP bridge for governed, Git-versioned repository/database cognition.",
+  "keywords": ["dsh-plugin", "deepseek-harness", "aoci", "aoci-code", "mcp", "model-context-protocol", "code-understanding", "llm", "agent"],
+  "repository": { "type": "git", "url": "git+https://github.com/Fourteenth-Night/dsh-aoci.git" },
+  "homepage": "https://github.com/Fourteenth-Night/dsh-aoci#readme",
+  "bugs": { "url": "https://github.com/Fourteenth-Night/dsh-aoci/issues" },
   "type": "module",
   "main": "lib/index.mjs",
   "exports": {
