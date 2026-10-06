@@ -1,0 +1,12 @@
+{
+  "id": "dsh-external/dsh-aoci",
+  "version": "0.1.8",
+  "main": "./lib/index.mjs",
+  "description": "AOCI 认知层：为 DSH 提供全仓库代码/数据库认知地图（MCP 桥接 + 索引治理 + 只读面板）",
+  "engines": { "dsh": ">=0.0.1" },
+  "contributes": {
+    "tools": [],
+    "skills": [{ "name": "aoci-cognition", "path": "./lib/skill/SKILL.md" }]
+  },
+  "client": { "main": "./lib/client.js" }
+}

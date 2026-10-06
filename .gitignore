@@ -1,0 +1,11 @@
+node_modules/
+dist/
+lib/
+*.tgz
+*.tsbuildinfo
+.probe.txt
+
+# local E2E scripts (contain absolute paths, not committed)
+/e2e-mcp.mjs
+/test-live.mjs
+/test-one-shot.mjs

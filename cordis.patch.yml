@@ -1,0 +1,11 @@
+# dsh-aoci bundle patch（对照 dsh-task-board / dsh-better-sidebar 的 bundle patch 通道）
+#
+# 双面插件：包根 exports "." 在 host 进程运行（node 半边）；dsh.client 声明使
+# exports "./client" 在 web GUI 浏览器半边加载（serve 于 /plugins/<id>/client.js）。
+#
+# 安装：
+#   dsh plugin --profile <name> add ./dsh-aoci-0.1.0.tgz
+# 或从聚合包/私有仓库安装后由 bundles 挂载。
+- insert:
+    - id: aoci-cognition
+      name: 'dsh-aoci'
