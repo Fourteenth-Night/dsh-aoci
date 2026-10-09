@@ -27,9 +27,11 @@ mkdirSync(join(root, 'lib'), { recursive: true })
 writeFileSync(join(root, 'lib', 'client.js'), wrapped)
 
 const skill = join(root, 'src/skill/SKILL.md')
+const skillEn = join(root, 'src/skill/SKILL.en.md')
 if (existsSync(skill)) {
   mkdirSync(join(root, 'lib/skill'), { recursive: true })
   copyFileSync(skill, join(root, 'lib/skill/SKILL.md'))
+  if (existsSync(skillEn)) copyFileSync(skillEn, join(root, 'lib/skill/SKILL.en.md'))
 }
 rmSync(join(root, 'lib-tmp'), { recursive: true, force: true })
 console.log('client bundle wrapped -> lib/client.js (' + Buffer.byteLength(wrapped) + ' bytes)')

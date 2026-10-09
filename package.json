@@ -19,6 +19,7 @@
     "lib/**/*.js.map",
     "lib/**/*.jsx",
     "lib/skill/SKILL.md",
+    "lib/skill/SKILL.en.md",
     "dsh.plugin.json",
     "cordis.patch.yml",
     "README.md",
