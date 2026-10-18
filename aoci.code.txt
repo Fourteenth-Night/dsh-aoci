@@ -1,7 +1,7 @@
 #AOCI-CODE-VOLUME: 1
 
 ===C:/Users/ZhouHan/deepseek-harness/projects/dsh-aoci/===
-.gitattributes[FV4T]: F:Normalizes checkout line endings, pins AOCI cognition volumes to LF and marks binary or packaging paths | R:code:aoci.txt | A:- | S:*.txt stays LF so AOCI volume bytes remain hash-stable; a CRLF checkout would change source bytes and break bindings
+.gitattributes[FV4T]: F:Normalizes checkout line endings, pins AOCI cognition volumes and itself to LF, and marks binary or packaging paths | R:code:aoci.txt | A:- | S:*.txt/.gitattributes stay LF; CRLF checkout would change AOCI volume bytes and break bindings
 .gitignore[FV4T]: F:Excludes build output, tarballs and local E2E scripts from Git | R:- | A:- | S:lib/ and *.tgz are generated artifacts; committing them ships stale bundles
 AGENTS.md[SG7M]: F:Documents the AOCI cognition contract and entry points for coding agents in this repository | R:code:README.md | A:- | S:Its aoci:begin/aoci:end block is rewritten by aoci init; manual edits inside are overwritten
 LICENSE[SG5T]: F:MIT license text for the plugin | R:- | A:- | S:-
