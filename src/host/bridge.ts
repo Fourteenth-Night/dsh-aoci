@@ -1,7 +1,7 @@
 // 动态 MCP 桥：按需拉起 aoci --repo <root> mcp，连接并把工具动态注册进 ctx.tools
 // 命名与 dsh-mcp-client 一致：mcp__aoci-<slug>__<tool>。
 // toolSurface=compact 时只注册 aoci_overview + 聚合入口 aoci_call（省 token）；full 注册全部九工具。
-// 含进程健康监视与自动重连；子进程环境经白名单清洗。
+// 另提供 ensure/call 供静态工具 aoci_cognition 懒绑定调用（保证 PTC 模式也可用）。
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -70,6 +70,26 @@ export class AociBridge {
 
   isBound(slug: string): boolean { return this.bound.has(slug) }
 
+  /** 懒绑定：已绑定则复用，否则按 root+binaryPath 建立 */
+  async ensure(root: string, binaryPath: string): Promise<BindResult> {
+    const slug = slugFromRoot(root)
+    if (this.isBound(slug)) {
+      return { ok: true, slug, namespace: mcpServerName('aoci', slug), tools: this.boundTools(slug), message: '项目 ' + slug + ' 已绑定（复用现有 aoci mcp 服务器）' }
+    }
+    return this.bind(root, binaryPath)
+  }
+
+  /** 调用已绑定项目的 AOCI MCP 工具（供静态工具 aoci_cognition 使用） */
+  async call(slug: string, tool: string, args: Record<string, unknown>): Promise<string> {
+    const entry = this.bound.get(slug)
+    if (!entry) throw new Error('项目未绑定: ' + slug + '（可先调用 aoci_use 或 aoci_cognition 自动绑定）')
+    if (!AOCI_TOOLS.includes(tool as never)) throw new Error('未知 AOCI 工具: ' + tool)
+    const res = await entry.client.callTool({ name: tool, arguments: args })
+    const r = res as { isError?: boolean }
+    if (r.isError) throw new Error(JSON.stringify(res))
+    return shapeMcpResult(res)
+  }
+
   /** 当前绑定暴露的工具名（用于状态展示与 token 估算） */
   boundTools(slug: string): string[] {
     const entry = this.bound.get(slug)
@@ -96,7 +116,7 @@ export class AociBridge {
         env: sanitizedEnv(),
         stderr: 'pipe',
       })
-      client = new Client({ name: 'dsh-aoci', version: '0.2.2' }, { capabilities: {} })
+      client = new Client({ name: 'dsh-aoci', version: '0.2.3' }, { capabilities: {} })
       await client.connect(transport)
       await client.listTools()
     } catch (e) {

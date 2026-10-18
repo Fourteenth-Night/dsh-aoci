@@ -35,6 +35,7 @@ AOCI-CODE is licensed FSL-1.1-MIT (source-available); this plugin **does not bun
 | Audit | `aoci_audit` | Runs verify/check, reports HEAD vs maintained-baseline drift and the structured audit-event timeline |
 | Build status | `aoci_build_status` | Recent build/maintain/verify runs and current bindings |
 | System Cognition | `aoci_query {kind: relations\|impact\|lineage\|db}` (compact) · `aoci_relations`, `aoci_impact <object>`, `aoci_lineage`, `aoci_db <source>` (full) | Dependency projection, impact analysis, lineage, database preflight |
+| Static cognition entry | `aoci_cognition { action, project?, path?, args? }` | Works in **both PTC and native tool modes** (registered at plugin load, lazy-binds the repo): rules/overview/maintain/update_entry/search/header/report |
 | Agent-driven binding | `aoci_use <path>`, `aoci_unbind <slug>` | Autonomous repository selection |
 | Slash command | `/aoci [path]` | One-shot onboarding (verify + bind + instruct agent to build) |
 

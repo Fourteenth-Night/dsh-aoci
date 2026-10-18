@@ -9,7 +9,8 @@ import type { EvidenceStore } from './evidence'
 import { subprocessAvailable, runAoci } from './cli'
 import { installHint } from './aoci-bin'
 import { isGitRepo, gitHead, gitDirty } from './workspace'
-import { slugFromRoot, resolveProjectPath, detectAociBinary, estimateToolSurfaceChars } from './util'
+import { slugFromRoot, resolveProjectPath, detectAociBinary, estimateToolSurfaceChars, normalizeAociAction } from './util'
+import { locateRepo } from './repo-locate'
 import { buildRefreshPlan } from './refresh'
 import { appendAudit, readAudit, formatAuditReport } from './audit'
 
@@ -20,6 +21,8 @@ export interface ToolDeps {
   openPanel(slug: string): void
   bridge: {
     bind(root: string, binaryPath: string): Promise<{ ok: boolean; slug: string; namespace: string; tools: string[]; message: string }>
+    ensure(root: string, binaryPath: string): Promise<{ ok: boolean; slug: string; namespace: string; tools: string[]; message: string }>
+    call(slug: string, tool: string, args: Record<string, unknown>): Promise<string>
     unbind(slug: string): Promise<boolean>
     boundTools(slug: string): string[]
   }
@@ -191,6 +194,52 @@ export function installTools(ctx: Context, deps: ToolDeps) {
         dbNote = pre.exitCode === 0 ? '\n数据库预检(' + args.db + ')通过。' : '\n数据库预检(' + args.db + ')未通过(exit ' + pre.exitCode + '): ' + (pre.stderr || pre.stdout).slice(0, 200)
       }
       return br.message + dbNote
+    },
+  }))
+
+  // ---------- 静态认知入口（PTC/native 均可用；懒绑定） ----------
+  register(defineTool({
+    name: 'aoci_cognition',
+    description: '静态 AOCI 认知入口（任何工具模式可用）：action=rules|overview|get_entries|search|maintain|update_entry|remove_entry|header|report；project 或 path 指定仓库，缺省自动定位并懒绑定。',
+    parameters: {
+      action: { type: 'string', required: true, description: 'rules/overview/get_entries/search/maintain/update_entry/remove_entry/header/report' },
+      project: { type: 'string', description: '项目 slug（可选）' },
+      path: { type: 'string', description: '仓库绝对路径（可选，与 project 二选一）' },
+      args: { type: 'json', description: '工具参数 JSON（可选）' },
+    },
+    output: { schema: { type: 'string' }, render: (_a, v) => toolText(v) },
+    async execute(args) {
+      const tool = normalizeAociAction(String((args as { action?: string }).action ?? ''))
+      if (!tool) return '未知 action: ' + String((args as { action?: string }).action ?? '') + '（可选：rules/overview/get_entries/search/maintain/update_entry/remove_entry/header/report）'
+      const writeActions = ['aoci_maintain', 'aoci_update_entry', 'aoci_remove_entry']
+      if (deps.readOnly && writeActions.includes(tool)) return '只读模式：已禁止维护类操作。'
+      const binary = (await deps.binaryPath()) ?? detectAociBinary()
+      if (!binary) return installHint()
+      let root: string | undefined
+      if (args.path) root = resolveProjectPath(String(args.path), deps.defaultRoot)
+      else if (args.project) {
+        const p = await resolveProject(String(args.project))
+        root = p?.root ?? (await isGitRepo(String(args.project)) ? String(args.project) : undefined)
+      }
+      if (!root) {
+        const recent = (await deps.store.loadProjects()).map((p) => ({ root: p.root, updatedAt: p.updatedAt }))
+        root = await locateRepo({ defaultRoot: deps.defaultRoot, recent })
+      }
+      if (!root) return '未找到可用 Git 仓库：请提供 project/path，或先执行 /aoci 绑定一次。'
+      if (!(await isGitRepo(root))) return '不是 Git 仓库：' + root
+      const ver = await deps.verifyBinary()
+      if (!ver.ok) return '二进制校验失败：' + (ver.reason ?? '未知原因') + '\n' + installHint()
+      const br = await deps.bridge.ensure(root, binary)
+      if (!br.ok) return br.message
+      try {
+        const callArgs = ((args as { args?: Record<string, unknown> }).args ?? {})
+        const out = await deps.bridge.call(br.slug, tool, callArgs)
+        audit({ ts: new Date().toISOString(), action: 'cognition', project: br.slug, ok: true, detail: tool })
+        return out
+      } catch (e) {
+        audit({ ts: new Date().toISOString(), action: 'cognition', project: br.slug, ok: false, detail: tool + ': ' + (e as Error).message.slice(0, 120) })
+        return 'AOCI 调用失败（' + tool + '）: ' + (e as Error).message
+      }
     },
   }))
 

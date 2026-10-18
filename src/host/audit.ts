@@ -2,7 +2,7 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 
-export type AuditAction = 'bind' | 'unbind' | 'init' | 'scan' | 'maintain' | 'verify' | 'check' | 'refresh' | 'audit' | 'db_preflight'
+export type AuditAction = 'bind' | 'unbind' | 'init' | 'scan' | 'maintain' | 'verify' | 'check' | 'refresh' | 'audit' | 'db_preflight' | 'cognition'
 
 export interface AuditEvent {
   ts: string

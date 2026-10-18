@@ -1,6 +1,6 @@
 // 优化项纯函数单测（v0.2.0：工具面/预算/审计/刷新/二进制校验）
 import { describe, it, expect, afterEach } from 'vitest'
-import { compareVersions, parseAociVersion, sanitizedEnv, compactToolResult, estimateToolSurfaceChars, parseAociInput } from '../src/host/util'
+import { compareVersions, parseAociVersion, sanitizedEnv, compactToolResult, estimateToolSurfaceChars, parseAociInput, normalizeAociAction } from '../src/host/util'
 import { foldPolicy } from '../src/host/compaction'
 import { formatAuditReport } from '../src/host/audit'
 import { buildRefreshPlan } from '../src/host/refresh'
@@ -100,5 +100,14 @@ describe('配置默认值', () => {
 describe('解析标志（保留）', () => {
   it('--db/--skip-scan', () => {
     expect(parseAociInput('D:/r --db primary --skip-scan')).toEqual({ path: 'D:/r', db: 'primary', skipScan: true })
+  })
+})
+
+describe('AOCI 动作归一化', () => {
+  it('短名与全名都归一', () => {
+    expect(normalizeAociAction('overview')).toBe('aoci_overview')
+    expect(normalizeAociAction('aoci_maintain')).toBe('aoci_maintain')
+    expect(normalizeAociAction(' update_entry ')).toBe('aoci_update_entry')
+    expect(normalizeAociAction('nope')).toBe('')
   })
 })

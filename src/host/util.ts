@@ -251,3 +251,12 @@ export function compactToolResult(raw: string, maxChars = 6000): string {
 export function estimateToolSurfaceChars(tools: Array<{ name: string; description?: string; parameters?: unknown }>): number {
   return tools.reduce((n, t) => n + t.name.length + (t.description?.length ?? 0) + JSON.stringify(t.parameters ?? {}).length, 0)
 }
+
+/** 归一化 AOCI 认知动作：'overview' / 'aoci_overview' 均 → 'aoci_overview'；未知返回 '' */
+export function normalizeAociAction(action: string): string {
+  const a = action.trim()
+  if (!a) return ''
+  const full = a.startsWith('aoci_') ? a : 'aoci_' + a
+  const known = ['aoci_rules', 'aoci_overview', 'aoci_get_entries', 'aoci_search', 'aoci_maintain', 'aoci_update_entry', 'aoci_remove_entry', 'aoci_header', 'aoci_report']
+  return known.includes(full) ? full : ''
+}
