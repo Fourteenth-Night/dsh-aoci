@@ -1,0 +1,63 @@
+#AOCI-CODE-VOLUME: 1
+
+===C:/Users/ZhouHan/deepseek-harness/projects/dsh-aoci/===
+.gitattributes[FV4T]: F:Normalizes checkout line endings and marks binary or packaging paths for Git | R:- | A:- | S:TS/JSON/MD must stay LF; a CRLF checkout changes source bytes and breaks source_sha256 bindings
+.gitignore[FV4T]: F:Excludes build output, tarballs and local E2E scripts from Git | R:- | A:- | S:lib/ and *.tgz are generated artifacts; committing them ships stale bundles
+AGENTS.md[SG7M]: F:Documents the AOCI cognition contract and entry points for coding agents in this repository | R:code:README.md | A:- | S:Its aoci:begin/aoci:end block is rewritten by aoci init; manual edits inside are overwritten
+LICENSE[SG5T]: F:MIT license text for the plugin | R:- | A:- | S:-
+README.md[SG8L]: F:Primary English documentation: architecture, tool surface, installation, configuration and verification | R:code:README.zh-CN.md,code:RELEASE.md | A:- | S:States compact tool surface as default and the static aoci_cognition entry; claims must track actual code
+README.zh-CN.md[SG7L]: F:Simplified Chinese mirror of the primary README | R:code:README.md | A:- | S:Must stay in sync with README.md; divergence misleads users about configuration and tool names
+RELEASE.md[SG6M]: F:Version history and per-release checklist for the plugin | R:code:README.md | A:- | S:Entries must match shipped behavior; no claims beyond verified capabilities
+cordis.patch.yml[FE7T]: F:Bundle patch inserting the aoci-cognition plugin entry | R:code:dsh.plugin.json,code:package.json | A:- | S:Entry id aoci-cognition must match package name dsh-aoci resolved by the profile loader
+dsh.plugin.json[FE7T]: F:Plugin manifest: id, version, main, skill contribution and client main entry | R:code:package.json,code:cordis.patch.yml | A:- | S:contributes.skills.path and engines.dsh are validated at load; a wrong path disables the skill
+package.json[FV8M]: F:Package manifest: exports, dsh bundle/compatibility/client declarations, peer deps and scripts | R:code:dsh.plugin.json,code:cordis.patch.yml,code:src/index.ts | A:exports,files,peerDependencies,engines | S:exports must map "." to lib/index.mjs and "./client" to lib/client.js; dsh.bundle.patch must exist for installation
+pnpm-lock.yaml[FV5L]: F:Lockfile pinning the plugin dev dependency graph | R:code:package.json | A:- | S:CI installs with a frozen lockfile; package.json changes require regenerating this file
+tsconfig.json[FV6T]: F:TypeScript compiler configuration for typecheck and build | R:code:package.json | A:- | S:noEmit typecheck must stay strict; changing target or libs affects emitted ESM
+tsdown.config.ts[XV5T]: F:Bundler configuration building the host half as ESM | R:code:package.json | A:- | S:External peer deps must stay external so the host resolves them from DSH
+vitest.config.ts[TQ5T]: F:Vitest configuration for the unit test suite | R:code:package.json | A:- | S:Tests run without network; keep the suite deterministic
+
+===C:/Users/ZhouHan/deepseek-harness/projects/dsh-aoci/.github/workflows/===
+ci.yml[OQ6T]: F:Runs typecheck, unit tests and packaging on Windows for pushes and pull requests | R:code:package.json | A:- | S:Installs with a frozen lockfile and runs pnpm check, so a stale pnpm-lock.yaml fails CI
+
+===C:/Users/ZhouHan/deepseek-harness/projects/dsh-aoci/docs/===
+DESIGN.md[SG7L]: F:Design rationale: host/client split, dynamic MCP bridge, evidence ledger and governance semantics | R:code:src/host/bridge.ts | A:- | S:Records empirically fixed AOCI semantics (init/scan conditions); keep aligned when changing the flow
+dsh-aoci-plugin-design.md[SG6L]: F:Earlier copy of the combined design document kept in the repository | R:code:docs/DESIGN.md | A:- | S:Duplicated content must not diverge silently from DESIGN.md
+
+===C:/Users/ZhouHan/deepseek-harness/projects/dsh-aoci/scripts/===
+build-client.mjs[XV6T]: F:Builds the browser half as CJS and wraps it for DSH __ModuleLoader__.load, then copies skill assets | R:code:src/client.ts,code:lib/client.js | A:- | S:The wrapper is required; plain ESM output fails to load in the Web client
+postbuild.mjs[XV5T]: F:Copies src/skill/SKILL.md into lib/skill for the plugin manifest skill contribution | R:code:src/skill/SKILL.md,code:dsh.plugin.json | A:- | S:Skips silently when the source is missing; the skill then fails to load
+
+===C:/Users/ZhouHan/deepseek-harness/projects/dsh-aoci/src/===
+client.ts[EU6T]: F:Client half entry registering browser UI components through the __ModuleLoader__ protocol | R:code:src/client/setup.tsx,code:src/client/board.tsx,code:src/client/panel.tsx | A:- | S:Must remain CJS-compatible via the loader wrapper; top-level ESM imports break registration
+index.ts[EE9M]: F:Plugin apply: wires config, evidence store, binary verification, bridge, tools, command, compaction and nightly guard | R:code:src/host/config.ts,code:src/host/bridge.ts,code:src/host/tools.ts | A:apply,config,name | S:apply must return undefined; dispose must clear timers and dispose the bridge
+
+===C:/Users/ZhouHan/deepseek-harness/projects/dsh-aoci/src/client/===
+board.tsx[AU5T]: F:Read-only board view listing AOCI projects and their state | R:code:src/client.ts | A:- | S:Display only; it must not trigger index writes
+panel.tsx[AU5T]: F:Per-project panel: cognition overview, governance status and entry browsing | R:code:src/client.ts,code:src/host/routes.ts | A:- | S:Reads only /aoci/api and degrades when routes are disabled
+setup.tsx[AU5T]: F:Settings UI for binary path, defaultRoot, tool surface and governance options | R:code:src/client.ts,code:src/host/config.ts | A:- | S:Writes flow through the settings seam and never persist secrets
+
+===C:/Users/ZhouHan/deepseek-harness/projects/dsh-aoci/src/host/===
+aoci-bin.ts[RG6T]: F:Locates the aoci binary, computes SHA-256 and provides download guidance | R:code:src/host/binary-verify.ts | A:BinaryInfo,inspectBinary,sha256File,installHint | S:Never bundles or downloads the binary; verification happens in binary-verify.ts before use
+audit.ts[OO6T]: F:Appends structured governance events and renders the audit report | R:code:src/host/evidence.ts | A:appendAudit,readAudit,formatAuditReport | S:Audit writes must never block the main flow; failures are swallowed
+binary-verify.ts[RS7T]: F:Verifies the aoci binary by SHA-256 and minimum version, caching by path, size and mtime | R:code:src/host/aoci-bin.ts,code:src/host/cli.ts | A:verifyAociBinary,BinaryVerification | S:A mismatch blocks binding; cache must invalidate when the binary changes
+bridge.ts[IN8M]: F:Dynamic MCP bridge: spawns aoci mcp per project, registers tools, shapes results and reconnects on failure | R:code:src/host/cli.ts,code:src/host/util.ts,code:src/host/logger.ts | A:AociBridge,bind,ensure,call,unbind | S:Child env is sanitized; compact surface exposes aoci_overview plus aoci_call; reconnect uses 2s backoff
+cli.ts[RO7T]: F:Runs aoci via managed ctx.subprocess when available, falling back to node spawn | R:code:src/host/util.ts | A:runAoci,aociJson,subprocessAvailable | S:Environment is whitelisted; timeouts terminate the managed range and collected output is bounded
+command.ts[EU7T]: F:Registers the /aoci command: locates the repository, verifies the binary, conditionally runs init/scan and steers the agent to build cognition | R:code:src/host/bridge.ts,code:src/host/repo-locate.ts | A:installAociCommand | S:Registered via ctx.inject(['commands']); no-arg mode falls back through cwd parents, defaultRoot and recent projects
+compaction.ts[RR6T]: F:Compaction bridge folding AOCI tool results into a receipt and injecting budget-aware recovery guidance | R:code:src/host/bridge.ts | A:compactAociResults,installAociCompactionGuard,foldPolicy | S:Whole-index bodies must not enter the compaction handoff; pressure policy uses ctx.tokenMeter when present
+config.ts[FC7T]: F:Settings schema: binary path and verification, tool surface, governance, readOnly, budget thresholds and projects | R:code:src/index.ts | A:AociConfigSchema,AociConfig | S:Defaults select compact surface and standard governance; readOnly blocks maintenance writes
+evidence.ts[PD6T]: F:Evidence ledger: projects.json and runs.jsonl with serialized atomic writes under state/aoci | R:code:src/index.ts | A:EvidenceStore,upsertProject,appendRun,readRuns | S:Writes are serialized; upsertProject must not call other serialized methods or it deadlocks
+jobs.ts[OW5T]: F:Builds the nightly guard: cron matching and once-per-day run tracking for verify jobs | R:code:src/host/refresh.ts | A:createNightlyGuard | S:Guard state is in-memory; a restart forgets which day already ran
+logger.ts[RO4T]: F:Resolves ctx.logger defensively and falls back to console methods | R:code:src/index.ts | A:safeLogger | S:Must never throw when logger is absent; plugin startup depends on it
+refresh.ts[OW6T]: F:Builds an incremental refresh plan from git drift: changed and untracked files plus maintenance instructions | R:code:src/host/workspace.ts,code:src/host/audit.ts | A:buildRefreshPlan,RefreshPlan | S:Instructions must forbid full rebuilds and require batch maintain plus verify
+repo-locate.ts[RG6T]: F:Locates a Git repository by cwd, parent directories, defaultRoot or the most recent project | R:code:src/host/util.ts | A:locateRepo,isGitRepository,LocateOptions | S:Uses .git presence only; it never inspects repository contents
+routes.ts[IU5T]: F:Read-only panel HTTP routes exposing project state under /aoci/api | R:code:src/host/evidence.ts | A:installRoutes | S:Only mounted when httpRoutes is enabled and stays loopback-only
+session-driver.ts[OW5T]: F:Drives a cognition session sequence: rules, overview, maintenance and verification steps for an agent | R:code:src/host/bridge.ts | A:runCognizanceSession | S:Semantic steps are delegated to the model; the driver never fabricates entries
+system-prompt.ts[RG6T]: F:Injects the AOCI cognition discipline section into the model system prompt | R:code:src/host/config.ts | A:installSystemPrompt | S:Tool-surface and governance hints must match the active configuration
+tools.ts[EE8L]: F:Registers deterministic tools: status, verify, check, use, cognition, refresh, build status, audit, query and unbind | R:code:src/host/bridge.ts,code:src/host/refresh.ts,code:src/host/audit.ts | A:installTools,ToolDeps | S:compact surface hides scan/panel/system-query tools; aoci_cognition provides MCP actions in every tool mode
+types.ts[RG7T]: F:Shared types for projects, MCP entries, task runs, AOCI tool names and managed assets | R:- | A:ProjectRecord,TaskRun,McpEntry,AOCI_TOOLS,AOCI_MANAGED_ASSETS | S:Keep AOCI_TOOLS in sync with the MCP server tool list
+util.ts[RG7M]: F:Pure helpers: slugs, path resolution, env whitelist, version comparison, flags parsing and result shaping | R:code:src/host/bridge.ts,code:src/host/command.ts | A:safeGet,resolveProjectPath,slugFromRoot,parseAociInput,detectAociBinary | S:Safe service access and env whitelisting are security boundaries; do not widen them casually
+workspace.ts[RG6T]: F:Git and filesystem helpers: repo checks, HEAD, drift sets and gitignore discipline | R:code:src/host/refresh.ts | A:isGitRepo,gitHead,gitDirty,gitDrift,checkIgnoreDiscipline | S:Uses git CLI with a short timeout; failures degrade to empty results
+
+===C:/Users/ZhouHan/deepseek-harness/projects/dsh-aoci/src/skill/===
+SKILL.en.md[SG7T]: F:English skill document teaching agents the AOCI collaboration protocol | R:code:src/skill/SKILL.md | A:- | S:Must stay in sync with SKILL.md semantics and the current tool surface
+SKILL.md[SG7T]: F:Chinese skill document teaching agents the AOCI collaboration protocol | R:code:src/skill/SKILL.en.md | A:- | S:Entry formats and limits must match the machine contract; do not invent tag syntax
