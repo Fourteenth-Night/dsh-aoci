@@ -23,3 +23,6 @@
 lib/ export-ignore
 node_modules/ export-ignore
 *.tgz export-ignore
+
+# AOCI cognition volumes: pin LF so file bytes stay hash-stable
+*.txt text eol=lf
