@@ -22,6 +22,7 @@ export interface AociCommandDeps {
   governance?: 'strict' | 'standard' | 'relaxed'
   verifyBinary?(): Promise<{ ok: boolean; version?: string; sha256?: string; reason?: string }>
   stateDir?: string
+  recentProjects?(): Promise<Array<{ root: string; slug: string; updatedAt?: string }>>
 }
 
 interface CommandResult { kind: 'success' | 'error'; text: string }
@@ -29,6 +30,34 @@ interface CommandAgent { steer(message: unknown): void }
 
 export function installAociCommand(ctx: Context, deps: AociCommandDeps) {
   const logger = safeLogger(ctx)
+
+  /** 无参 /aoci 的仓库定位：会话 cwd → 上溯父目录 → defaultRoot → 最近绑定的项目 */
+  const locateRepo = async (cwd?: string): Promise<string | undefined> => {
+    const isRepo = async (p: string): Promise<boolean> => {
+      try { return await isGitRepo(p) } catch { return false }
+    }
+    // 1) 会话工作区本身
+    if (cwd && await isRepo(cwd)) return cwd
+    // 2) 上溯父目录（最多 8 层）
+    if (cwd) {
+      let p = cwd.replace(/[\\/]+$/, '')
+      for (let i = 0; i < 8; i++) {
+        const parent = p.replace(/[\\/][^\\/]+$/, '')
+        if (!parent || parent === p) break
+        if (await isRepo(parent)) return parent
+        p = parent
+      }
+    }
+    // 3) defaultRoot
+    if (deps.defaultRoot && await isRepo(deps.defaultRoot)) return deps.defaultRoot
+    // 4) 最近绑定的项目（按 updatedAt 倒序）
+    try {
+      const recent = deps.recentProjects ? await deps.recentProjects() : []
+      const sorted = [...recent].sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
+      for (const p of sorted) if (await isRepo(p.root)) return p.root
+    } catch { /* ignore */ }
+    return undefined
+  }
 
   const spec = {
     name: 'aoci',
@@ -44,14 +73,12 @@ export function installAociCommand(ctx: Context, deps: AociCommandDeps) {
         if (ver && !ver.ok) return { kind: 'error', text: '二进制校验失败：' + (ver.reason ?? '未知原因') + '\n' + installHint() }
         let resolved = flags.path ? resolveProjectPath(flags.path, deps.defaultRoot) : undefined
         if (!resolved) {
-          // 无参：尝试自动定位当前会话工作区仓库
-          try {
-            const session = (agent as unknown as { session?: { header?: { cwd?: string }; cwd?: string } }).session
-            const cwd = session?.header?.cwd ?? session?.cwd
-            if (cwd) resolved = resolveProjectPath(cwd, undefined)
-          } catch { /* ignore */ }
+          // 无参：多级回退定位仓库（会话工作区 → 上溯父目录 → defaultRoot → 最近绑定项目）
+          const session = (agent as unknown as { session?: { header?: { cwd?: string }; cwd?: string } }).session
+          const cwd = session?.header?.cwd ?? session?.cwd
+          resolved = await locateRepo(cwd)
         }
-        if (!resolved) return { kind: 'error', text: '用法：/aoci [路径]（绝对路径，或相对 defaultRoot 的相对路径），或 /aoci 自动定位当前工作区' }
+        if (!resolved) return { kind: 'error', text: '未找到可用的 Git 仓库。无参 /aoci 会依次尝试：会话工作区 → 上溯父目录 → defaultRoot → 最近绑定的项目。请用 /aoci <绝对路径> 指定仓库，或在设置里配置 defaultRoot，或先绑定一次项目。' }
         if (!(await isGitRepo(resolved))) return { kind: 'error', text: '不是 Git 仓库（需要 .git）：' + resolved }
 
         const slug = slugFromRoot(resolved)

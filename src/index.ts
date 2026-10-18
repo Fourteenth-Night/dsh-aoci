@@ -146,6 +146,7 @@ export const apply = (ctx: Context, config?: AociConfig) => {
     defaultRoot: cfg.defaultRoot,
     readOnly: cfg.readOnly ?? false,
     governance: cfg.governance ?? 'standard',
+    recentProjects: async () => (await store.loadProjects()).map((p) => ({ root: p.root, slug: p.slug, updatedAt: p.updatedAt })),
   })
   installAociCompactionGuard(ctx, {
     serverNamespace: cfg.mcp?.serverNamePrefix ?? 'aoci',
