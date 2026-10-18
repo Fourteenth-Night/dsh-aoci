@@ -38,17 +38,37 @@ export function compactAociResults(blocks: Array<{ type: string; text?: string; 
   return out
 }
 
+export type FoldPolicy = 'none' | 'fold' | 'fold+compact'
+
+/** 纯函数：按上下文压力比例与预算阈值给出折叠策略 */
+export function foldPolicy(ratio: number | undefined, budget: { warn: number; fold: number; compact: number }): FoldPolicy {
+  if (ratio === undefined || Number.isNaN(ratio)) return 'none'
+  if (ratio >= budget.compact) return 'fold+compact'
+  if (ratio >= budget.fold) return 'fold'
+  return 'none'
+}
+
 /** 在 dsh-compaction 事件上挂接恢复指令注入（事件名 'compaction/start'/'compaction/end'；以运行时 cordis_inspect 为准） */
-export function installAociCompactionGuard(ctx: Context, opts: { serverNamespace: string; refreshEventId: () => string }) {
+export function installAociCompactionGuard(ctx: Context, opts: {
+  serverNamespace: string
+  refreshEventId: () => string
+  budget?: { warn: number; fold: number; compact: number }
+  getPressure?: (session?: unknown) => number | undefined
+}) {
   const emitter = ctx as unknown as { on?: (event: string, cb: (...args: unknown[]) => void) => void }
   if (!emitter.on) return
-  emitter.on('compaction/end', () => {
+  const budget = opts.budget ?? { warn: 0.6, fold: 0.75, compact: 0.9 }
+  emitter.on('compaction/end', (...args: unknown[]) => {
+    let pressure: number | undefined
+    try { pressure = opts.getPressure?.((args[0] as { session?: unknown } | undefined)?.session) } catch { pressure = undefined }
+    const policy = foldPolicy(pressure, budget)
     const guidance = [
       '[AOCI] 检测到上下文压缩。按 AOCI 压缩契约：',
       '1) 若 aoci_rules 不再可靠，先重新加载；',
       '2) 以 refresh_event_id=' + opts.refreshEventId() + ' 声明 context_compaction；',
       '3) 完成一次完整 Overview 光标、确认与 attestation（check_only 不是替代品）。',
-    ].join('\n')
+      policy !== 'none' ? '4) 预算感知：' + (pressure !== undefined ? '当前上下文压力 ' + Math.round(pressure * 100) + '%' : '压力未知') + ' 超过阈值，AOCI 大工具结果请优先折叠为 receipt；' + (policy === 'fold+compact' ? '建议尽快执行 /compact 或分段继续。' : '必要时分段加载 Overview。') : '',
+    ].filter(Boolean).join('\n')
     safeLogger(ctx).info(guidance)
   })
 }

@@ -1,6 +1,9 @@
-// 受控确定性命令（设计文档 4.4）：经 ctx.subprocess 执行 aoci 并解析 --json
+// 受控确定性命令（设计文档 4.4）：优先经 ctx.subprocess 受管进程执行 aoci；
+// 无受管服务时降级到 node child_process（仅本地开发/测试）。
 import { spawn } from 'node:child_process'
 import type { Context } from '@deepseek-ai/cordis'
+import type { SubprocessHandle, SubprocessOutcome, SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
+import { sanitizedEnv } from './util'
 
 export interface AociCliSpec {
   argv: string[]
@@ -18,31 +21,105 @@ export interface AociCliOutcome {
   timedOut: boolean
 }
 
-export function subprocessAvailable(): boolean {
-  // 静态 bundle 使用 node child_process 直接执行，始终可用
+function getSubprocess(ctx: Context | undefined): SubprocessRuntime | undefined {
+  if (!ctx) return undefined
+  try {
+    const svc = (ctx as unknown as { subprocess?: SubprocessRuntime }).subprocess
+    return svc && typeof svc.spawn === 'function' ? svc : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** 是否具备受管子进程服务（无 ctx 时视为可用，兼容旧调用） */
+export function subprocessAvailable(ctx?: Context): boolean {
+  if (ctx) return !!getSubprocess(ctx)
   return true
 }
 
-/** 执行 aoci（node child_process；静态 bundle 环境可用）；超时强制结束进程树 */
-export async function runAoci(_ctx: Context, spec: AociCliSpec): Promise<AociCliOutcome> {
+/** 执行 aoci：优先 ctx.subprocess（环境清洗/超时/取消/输出上限），降级 node spawn */
+export async function runAoci(ctx: Context, spec: AociCliSpec): Promise<AociCliOutcome> {
+  const managed = getSubprocess(ctx)
+  if (managed && process.env.DSH_AOCI_NATIVE_SPAWN !== '1') return runManaged(managed, spec)
+  return runNode(spec)
+}
+
+async function runManaged(sp: SubprocessRuntime, spec: AociCliSpec): Promise<AociCliOutcome> {
   const timeoutMs = spec.timeoutMs ?? 60_000
   const maxBytes = spec.maxOutBytes ?? 4 * 1024 * 1024
-  const child = spawn(spec.argv[0]!, spec.argv.slice(1), {
-    cwd: spec.cwd,
-    env: { ...process.env, ...spec.env },
-    stdio: ['ignore', 'pipe', 'pipe'],
-    windowsHide: true,
-  })
-  let stdout = ''
-  let stderr = ''
+  const ac = new AbortController()
+  const env = { ...sanitizedEnv(), ...(spec.env ?? {}) }
+  let handle: SubprocessHandle
+  try {
+    handle = sp.spawn({
+      argv: spec.argv,
+      cwd: spec.cwd ?? process.cwd(),
+      stdio: {
+        stdin: 'ignore',
+        stdout: { maxBytes },
+        stderr: { maxBytes },
+      },
+      graceMs: 5000,
+      signal: ac.signal,
+      env,
+    })
+  } catch (e) {
+    return { exitCode: null, signal: null, stdout: '', stderr: '受管子进程启动失败: ' + (e as Error).message, timedOut: false }
+  }
   let timedOut = false
-  const cap = (s: string) => s.length > maxBytes ? s.slice(-maxBytes) : s
-  child.stdout.on('data', (d: Buffer) => { stdout = cap(stdout + d.toString('utf8')) })
-  child.stderr.on('data', (d: Buffer) => { stderr = cap(stderr + d.toString('utf8')) })
-  const timer = setTimeout(() => { timedOut = true; try { child.kill() } catch { /* ignore */ } }, timeoutMs)
-  const code: number | null = await new Promise((resolve) => child.once('close', (c) => resolve(c)))
+  const timer = setTimeout(() => {
+    timedOut = true
+    try { handle.terminate() } catch { /* ignore */ }
+    try { ac.abort() } catch { /* ignore */ }
+  }, timeoutMs)
+  let outcome: SubprocessOutcome
+  try {
+    outcome = await handle.done
+  } catch (e) {
+    clearTimeout(timer)
+    return { exitCode: null, signal: null, stdout: '', stderr: '受管子进程失败: ' + (e as Error).message, timedOut }
+  }
   clearTimeout(timer)
-  return { exitCode: code, signal: null, stdout, stderr, timedOut }
+  const readAll = (reader: { readFrom(from: number): { text: string; lossy: boolean } } | undefined): string => {
+    if (!reader) return ''
+    const res = reader.readFrom(0)
+    return (res.lossy ? '[输出超过上限，已保留尾部]\n' : '') + res.text
+  }
+  return {
+    exitCode: outcome.exitCode,
+    signal: outcome.signal,
+    stdout: readAll(handle.collected.stdout),
+    stderr: readAll(handle.collected.stderr),
+    timedOut,
+  }
+}
+
+function runNode(spec: AociCliSpec): Promise<AociCliOutcome> {
+  const timeoutMs = spec.timeoutMs ?? 60_000
+  const maxBytes = spec.maxOutBytes ?? 4 * 1024 * 1024
+  return new Promise((resolve) => {
+    const child = spawn(spec.argv[0]!, spec.argv.slice(1), {
+      cwd: spec.cwd,
+      env: { ...sanitizedEnv(), ...(spec.env ?? {}) },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    })
+    let stdout = ''
+    let stderr = ''
+    let timedOut = false
+    const cap = (s: string) => (s.length > maxBytes ? s.slice(-maxBytes) : s)
+    child.stdout.on('data', (d: Buffer) => { stdout = cap(stdout + d.toString('utf8')) })
+    child.stderr.on('data', (d: Buffer) => { stderr = cap(stderr + d.toString('utf8')) })
+    const timer = setTimeout(() => { timedOut = true; try { child.kill() } catch { /* ignore */ } }, timeoutMs)
+    child.once('close', (code) => {
+      clearTimeout(timer)
+      resolve({ exitCode: code, signal: null, stdout, stderr, timedOut })
+    })
+    child.once('error', (err) => {
+      clearTimeout(timer)
+      resolve({ exitCode: null, signal: null, stdout, stderr: (err as Error).message, timedOut })
+    })
+  })
 }
 
 export type AociJsonResult<T> = { ok: true; data: T } | { ok: false; code: string; message: string }

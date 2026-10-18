@@ -1,5 +1,6 @@
 // 纯函数工具：slug/serverName/凭据引用派生、五段 cron 匹配、UI JSON 解析、标志解析等（全部可单测）
-import { existsSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { McpEntry, ProjectConfig } from './types'
 import { AOCI_MANAGED_ASSETS as AOCI_MANAGED_ASSETS_FILTER } from './types'
@@ -187,4 +188,66 @@ export function parsePanelLink(json: string): { url?: string; port?: number } {
   } catch {
     return {}
   }
+}
+
+/** 文件 SHA-256（hex 小写）；读取失败返回 undefined */
+export function sha256File(path: string): string | undefined {
+  try {
+    return createHash('sha256').update(readFileSync(path)).digest('hex')
+  } catch {
+    return undefined
+  }
+}
+
+/** 从 `aoci version` / `--version` 输出解析版本号（如 0.1.0-rc21） */
+export function parseAociVersion(output: string): string | undefined {
+  const m = output.match(/(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)/)
+  return m ? m[1] : undefined
+}
+
+/** 版本比较：a < b 返回 -1，相等 0，a > b 返回 1；识别预发布段（rc/alpha 等按字符串序近似） */
+export function compareVersions(a: string, b: string): number {
+  const norm = (v: string) => v.trim().replace(/^v/i, '')
+  const [aMain, aPre] = norm(a).split('-')
+  const [bMain, bPre] = norm(b).split('-')
+  const pa = (aMain || '').split('.').map((x) => Number(x) || 0)
+  const pb = (bMain || '').split('.').map((x) => Number(x) || 0)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0)
+    if (d !== 0) return d < 0 ? -1 : 1
+  }
+  if (!aPre && !bPre) return 0
+  if (!aPre) return 1
+  if (!bPre) return -1
+  return aPre === bPre ? 0 : aPre < bPre ? -1 : 1
+}
+
+/** 受管子进程环境白名单：只透传系统必需变量、AOCI_DB_* 与显式配置项（剥离其余凭据与 DSH_* 事实） */
+export function sanitizedEnv(extra: string[] = []): Record<string, string> {
+  const keep = new Set(['PATH', 'Path', 'SystemRoot', 'SYSTEMROOT', 'TEMP', 'TMP', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'ComSpec', 'COMSPEC', 'PATHEXT', 'windir', 'WINDIR', 'NUMBER_OF_PROCESSORS', 'PROCESSOR_ARCHITECTURE'])
+  const env: Record<string, string> = {}
+  for (const [k, v] of Object.entries(process.env)) {
+    if (v === undefined) continue
+    if (keep.has(k) || k.startsWith('AOCI_DB_') || extra.some((e) => e.toUpperCase() === k.toUpperCase())) env[k] = v
+  }
+  return env
+}
+
+/** 工具结果整形：JSON 可解析时只保留关键字段并限制长度；不可解析时按字符截断并给 receipt */
+export function compactToolResult(raw: string, maxChars = 6000): string {
+  const truncated = (text: string) =>
+    text.length <= maxChars ? text : text.slice(0, maxChars) + '\n…[truncated ' + (text.length - maxChars) + ' chars; full result remains in the session log]'
+  try {
+    const parsed = JSON.parse(raw)
+    const text = (parsed as Record<string, unknown>).text
+    if (typeof text === 'string') return truncated(text)
+    return truncated(JSON.stringify(parsed))
+  } catch {
+    return truncated(raw)
+  }
+}
+
+/** 工具面 token 估算（字符数/4，粗略；用于展示优化前后对比） */
+export function estimateToolSurfaceChars(tools: Array<{ name: string; description?: string; parameters?: unknown }>): number {
+  return tools.reduce((n, t) => n + t.name.length + (t.description?.length ?? 0) + JSON.stringify(t.parameters ?? {}).length, 0)
 }

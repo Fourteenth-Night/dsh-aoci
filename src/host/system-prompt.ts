@@ -3,7 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ProjectConfig } from './types'
 import { safeGet } from './util'
 
-export function installSystemPrompt(ctx: Context, projects: ProjectConfig[]) {
+export function installSystemPrompt(ctx: Context, projects: ProjectConfig[], opts: { surface?: 'compact' | 'full'; governance?: 'strict' | 'standard' | 'relaxed'; readOnly?: boolean; surfacePrefix?: string } = {}) {
   const sys = safeGet<{ section(opts: { name: string; order: number; text: string }): void }>(ctx, 'systemPrompt')
   if (!sys) return
   const summaries = projects.map((p) => {
@@ -22,6 +22,9 @@ export function installSystemPrompt(ctx: Context, projects: ProjectConfig[]) {
       '3) 压缩后：重新加载 aoci_rules；以 context_compaction + 幂等 refresh_event_id 声明；完成一次完整 Overview 与 attestation（check_only 不是替代品）；',
       '4) 维护完成后再修改任何受管文件，会使旧维护结果失效，须重新维护；',
       '5) 语义（F/R/A/S、标签、Curation）必须由你阅读真实源码后生成——禁止用 AST/import 扫描/正则/模板/脚本代写。',
+      opts.surface === 'compact' ? '6) 工具面为 compact：认知维护工具经聚合入口 aoci_call（tool=工具名, args=参数）调用；查询类用 aoci_query（kind=relations/impact/lineage/db）。' : '6) 工具面为 full：九个 AOCI 工具直接暴露为 mcp__aoci-<slug>__<tool>。',
+      opts.governance === 'strict' ? '7) 治理级别 strict：维护后必须 aoci_verify 与 aoci_check 均通过，否则不得声称 aligned。' : '7) 治理级别 ' + (opts.governance ?? 'standard') + '：维护后建议 verify/check。',
+      opts.readOnly ? '8) 只读模式已开启：禁止 init/scan/maintain 等写操作。' : '',
     ].join('\n'),
   })
 }

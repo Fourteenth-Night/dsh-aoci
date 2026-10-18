@@ -1,13 +1,13 @@
 // dsh-aoci host 半边入口（node 进程）
 // 双面插件：包根 exports "."（本文件）；exports "./client" 为浏览器半边。
-// 安装：dsh plugin --profile <name> add ./dsh-aoci-0.1.0.tgz
+// 安装：dsh plugin --profile <name> add ./dsh-aoci-0.2.0.tgz
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { AociConfigSchema, type AociConfig } from './host/config'
 import type { ProjectRecord } from './host/types'
 import { EvidenceStore } from './host/evidence'
-import { inspectBinary } from './host/aoci-bin'
-import { isGitRepo, checkIgnoreDiscipline } from './host/workspace'
+import { inspectBinary, installHint } from './host/aoci-bin'
+import { isGitRepo, checkIgnoreDiscipline, gitHead } from './host/workspace'
 import { slugFromRoot, mcpServerName, buildMcpEntry, safeGet, detectAociBinary } from './host/util'
 import { safeLogger } from './host/logger'
 import { installRoutes } from './host/routes'
@@ -15,9 +15,10 @@ import { installTools } from './host/tools'
 import { installSystemPrompt } from './host/system-prompt'
 import { createNightlyGuard } from './host/jobs'
 import { installAociCompactionGuard } from './host/compaction'
-import { runCognizanceSession } from './host/session-driver'
 import { AociBridge } from './host/bridge'
 import { installAociCommand } from './host/command'
+import { verifyAociBinary } from './host/binary-verify'
+import { runAoci } from './host/cli'
 
 export const name = 'dsh-aoci'
 export const config = AociConfigSchema
@@ -26,6 +27,16 @@ export const apply = (ctx: Context, config?: AociConfig) => {
   const cfg: AociConfig = {
     defaultRoot: config?.defaultRoot ?? '',
     binaryPath: config?.binaryPath ?? 'C:/aoci/bin/aoci.exe',
+    binaryAutoDetect: config?.binaryAutoDetect ?? true,
+    binarySha256: config?.binarySha256 ?? '',
+    minAociVersion: config?.minAociVersion ?? '0.1.0-rc18',
+    envPassthrough: config?.envPassthrough ?? [],
+    toolSurface: config?.toolSurface ?? 'compact',
+    autoRefresh: config?.autoRefresh ?? 'status',
+    governance: config?.governance ?? 'standard',
+    readOnly: config?.readOnly ?? false,
+    httpRoutes: config?.httpRoutes ?? false,
+    budget: config?.budget ?? { warn: 0.6, fold: 0.75, compact: 0.9 },
     autoInstallOnFirstUse: config?.autoInstallOnFirstUse ?? true,
     mcp: {
       serverNamePrefix: config?.mcp?.serverNamePrefix ?? 'aoci',
@@ -38,6 +49,24 @@ export const apply = (ctx: Context, config?: AociConfig) => {
 
   // ---- 证据账本 ----
   const store = new EvidenceStore(stateDir)
+
+  // ---- 二进制定位（配置优先，缺省自动探测） ----
+  const resolveBinary = async (): Promise<string | undefined> => {
+    const c = cfg.binaryPath
+    if (c && (await inspectBinary(c)).exists) return c
+    return cfg.binaryAutoDetect !== false ? detectAociBinary() : undefined
+  }
+
+  // ---- 二进制校验（SHA-256 / 最低版本 / 缓存） ----
+  const verifyBinary = async () => {
+    const binary = await resolveBinary()
+    if (!binary) return { ok: false, reason: '未找到 aoci 二进制。' + installHint() }
+    return verifyAociBinary(ctx, binary, {
+      expectedSha256: cfg.binarySha256 || undefined,
+      minVersion: cfg.minAociVersion || undefined,
+      stateDir,
+    })
+  }
 
   // ---- 项目记录初始化（launch：把配置中的项目落成 ProjectRecord） ----
   void (async () => {
@@ -55,6 +84,7 @@ export const apply = (ctx: Context, config?: AociConfig) => {
         index: { layout: 'volumes-v1', baseline: { established: false }, aligned: false, entries: 0 },
         database: { enabled: (p.dbSources?.length ?? 0) > 0, sources: (p.dbSources ?? []).map(s => ({ ...s })) },
         schedule: { cron: p.schedule?.cron ?? '0 3 * * *', verifyOnly: p.schedule?.verifyOnly ?? true },
+        lastHead: gitHead(p.root),
         createdAt: now,
         updatedAt: now,
       }
@@ -63,7 +93,7 @@ export const apply = (ctx: Context, config?: AociConfig) => {
     await store.saveProjects([...bySlug.values()])
   })().catch((e) => safeLogger(ctx).warn('dsh-aoci: 项目记录初始化失败: ' + (e as Error).message))
 
-  // ---- MCP 接线提示（条目由 profile 组合写入；插件侧校验并提示） ----
+  // ---- MCP 接线提示 ----
   for (const p of cfg.projects ?? []) {
     const slug = slugFromRoot(p.slug || p.root)
     const entry = buildMcpEntry(p, cfg.binaryPath, {
@@ -77,51 +107,80 @@ export const apply = (ctx: Context, config?: AociConfig) => {
       const bad = await checkIgnoreDiscipline(p.root)
       if (bad.length) safeLogger(ctx).warn('dsh-aoci: 项目 ' + slug + ' 的 .gitignore 误排除认知资产，scan 会静默跳过: ' + bad.join(', '))
       const bin = await inspectBinary(cfg.binaryPath)
-      if (!bin.exists) safeLogger(ctx).warn('dsh-aoci: ' + cfg.binaryPath + ' 不存在（' + installHintText() + '）')
+      if (!bin.exists) safeLogger(ctx).warn('dsh-aoci: ' + cfg.binaryPath + ' 不存在（' + installHint() + '）')
     })().catch(() => undefined)
   }
 
-  // ---- 设置（installSettingsSection：dsh-settings 在场时注册可编辑 namespace） ----
+  // ---- 设置 ----
   installSettings(ctx, cfg)
 
-  // ---- 路由 / 工具 / 系统段 / 压缩守卫 / 夜间健康检查 ----
-  installRoutes(ctx, {
-    store,
-    panelUrlFor: () => undefined, // M2: 解析 aoci ui --detach --json 的 loopback 链接
-  })
-  const bridge = new AociBridge(ctx)
+  // ---- 路由（默认关闭；启用时为只读面板 API） ----
+  if (cfg.httpRoutes) {
+    installRoutes(ctx, { store, panelUrlFor: () => undefined })
+  }
+
+  // ---- 动态 MCP 桥（工具面 compact/full） ----
+  const bridge = new AociBridge(ctx, { surface: cfg.toolSurface })
+
   installTools(ctx, {
     store,
-    binaryPath: async () => {
-      const c = cfg.binaryPath
-      if (c && (await inspectBinary(c)).exists) return c
-      return cfg.binaryAutoDetect !== false ? detectAociBinary() : undefined
-    },
+    binaryPath: resolveBinary,
     projects: async () => (cfg.projects ?? []).map((p) => ({ root: p.root, slug: slugFromRoot(p.slug || p.root) })),
-    openPanel: (slug) => safeLogger(ctx).info('dsh-aoci: 打开面板 ' + slug + '（M2 实现 iframe/反代）'),
+    openPanel: (slug) => safeLogger(ctx).info('dsh-aoci: 打开面板 ' + slug),
     bridge,
     defaultRoot: cfg.defaultRoot,
+    stateDir,
+    surface: cfg.toolSurface ?? 'compact',
+    governance: cfg.governance ?? 'standard',
+    autoRefresh: cfg.autoRefresh ?? 'status',
+    readOnly: cfg.readOnly ?? false,
+    verifyBinary,
   })
-  installSystemPrompt(ctx, cfg.projects ?? [])
+
+  installSystemPrompt(ctx, cfg.projects ?? [], { surface: cfg.toolSurface, governance: cfg.governance, readOnly: cfg.readOnly })
   installAociCommand(ctx, {
     store,
     bridge,
-    binaryPath: async () => (await inspectBinary(cfg.binaryPath)).exists ? cfg.binaryPath : undefined,
+    binaryPath: resolveBinary,
+    verifyBinary,
     defaultRoot: cfg.defaultRoot,
+    readOnly: cfg.readOnly ?? false,
+    governance: cfg.governance ?? 'standard',
   })
   installAociCompactionGuard(ctx, {
     serverNamespace: cfg.mcp?.serverNamePrefix ?? 'aoci',
     refreshEventId: () => 'dsh-' + Date.now().toString(16),
+    budget: cfg.budget,
+    // 尽力测量上下文压力：优先 ctx.tokenMeter；无会话/服务时返回 undefined（策略退化为纯提示）
+    getPressure: (session?: unknown) => {
+      try {
+        const meter = safeGet<{ measure(s: unknown): { totalTokens?: number } }>(ctx, 'tokenMeter')
+        const llm = safeGet<{ resolveModelInfo(): { context?: number | { maxTokens?: number } } }>(ctx, 'llm')
+        if (!meter || !session) return undefined
+        const m = meter.measure(session)
+        const info = llm?.resolveModelInfo()
+        const limit = typeof info?.context === 'number' ? info.context : info?.context?.maxTokens
+        if (typeof limit !== 'number' || limit <= 0 || typeof m.totalTokens !== 'number') return undefined
+        return Math.min(1, m.totalTokens / limit)
+      } catch {
+        return undefined
+      }
+    },
   })
 
-  // 夜间健康检查（浏览器心跳由 client 半边驱动 tick；host 侧供测试/CLI 复用）
+  // 夜间健康检查（autoRefresh=nightly 时真正执行 verify 并记审计/运行账本）
   const nightlyRuns = new Set<string>()
   const guard = createNightlyGuard({
     alreadyRanToday: (slug, day) => nightlyRuns.has(slug + ':' + day),
     markRan: (slug, day) => { nightlyRuns.add(slug + ':' + day) },
     runVerify: async (p) => {
+      const binary = await resolveBinary()
+      if (!binary) return
       safeLogger(ctx).info('dsh-aoci: 夜间 verify ' + p.root)
-      // M1: 实际执行 aoci verify --json 并经 store.appendRun 记录
+      const started = Date.now()
+      const out = await runAoci(ctx, { argv: [binary, '--repo', p.root, 'verify', '--json'], timeoutMs: 120000 })
+      const ok = out.exitCode === 0
+      void store.appendRun({ ts: new Date().toISOString(), kind: 'verify', project: slugFromRoot(p.slug || p.root), state: ok ? 'completed' : 'failed', exitCode: out.exitCode ?? undefined, message: 'nightly' })
     },
   })
   let timer: ReturnType<typeof setInterval> | undefined
@@ -134,12 +193,7 @@ export const apply = (ctx: Context, config?: AociConfig) => {
   } catch { /* Node timers 在受限沙箱不可用时跳过调度 */ }
   if (timer) (ctx as unknown as { on(e: string, cb: () => void): void }).on('dispose', () => { clearInterval(timer); void bridge.dispose() })
 
-  // 认知会话驱动（供 client/工具调用）；apply 必须返回 undefined（cordis 视返回值为 effect）
-  safeLogger(ctx).info('dsh-aoci: 已激活；项目数=' + (cfg.projects?.length ?? 0) + '，MCP 工具命名空间前缀=' + (cfg.mcp?.serverNamePrefix ?? 'aoci'))
-}
-
-function installHintText(): string {
-  return '请从官方 Release 下载 aoci 并放到稳定路径（插件不捆绑二进制，FSL-1.1-MIT）'
+  safeLogger(ctx).info('dsh-aoci: 已激活；项目数=' + (cfg.projects?.length ?? 0) + '，surface=' + cfg.toolSurface + '，governance=' + cfg.governance + '，readOnly=' + cfg.readOnly)
 }
 
 function installSettings(ctx: Context, cfg: AociConfig) {
@@ -152,7 +206,7 @@ function installSettings(ctx: Context, cfg: AociConfig) {
   }
 }
 
-/** profile 状态目录：优先 DSH_HOME/profiles/<name>/state/aoci，缺省回退用户缓存目录上的 aoci */
+/** profile 状态目录：优先 DSH_HOME/profiles/<name>/state/aoci，缺省回退 DSH_HOME/state/aoci */
 function joinStateDir(): string {
   const dshHome = process.env.DSH_HOME ?? joinHome('.dsh')
   const profile = process.env.DSH_PROFILE

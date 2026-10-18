@@ -42,3 +42,43 @@ export function gitHead(root: string): string | undefined {
 export function gitDirty(root: string): boolean {
   try { return execSync('git status --porcelain', { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim().length > 0 } catch { return false }
 }
+
+export interface GitDrift {
+  head: string | undefined
+  dirty: boolean
+  changed: string[]
+  untracked: string[]
+}
+
+/** 相对 sinceHead 的变更集（含工作区未提交与未跟踪文件） */
+export function gitDrift(root: string, sinceHead?: string): GitDrift {
+  const head = gitHead(root)
+  const changed = new Set<string>()
+  const untracked: string[] = []
+  try {
+    if (sinceHead && head && sinceHead !== head) {
+      const out = execSync('git diff --name-only ' + sinceHead + '..' + head, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+      for (const line of out.split(/\r?\n/)) if (line.trim()) changed.add(line.trim())
+    }
+    const out2 = execSync('git status --porcelain', { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+    for (const line of out2.split(/\r?\n/)) {
+      const t = line.trim()
+      if (!t) continue
+      const status = t.slice(0, 2)
+      const file = t.slice(3).trim()
+      if (!file) continue
+      if (status === '??') untracked.push(file)
+      else changed.add(file.replace(/^.* -> /, ''))
+    }
+  } catch {
+    /* 非 git 仓库或命令失败时返回空集 */
+  }
+  return { head, dirty: changed.size > 0 || untracked.length > 0, changed: [...changed], untracked }
+}
+
+/** 路径是否位于指定根目录内（大小写不敏感的 Windows 友好比较） */
+export function isWithinRoot(root: string, target: string): boolean {
+  const a = root.replace(/[\\/]+$/, '').toLowerCase() + (process.platform === 'win32' ? '\\' : '/')
+  const b = target.replace(/[\\/]+$/, '').toLowerCase()
+  return b === a.replace(/[\\/]$/, '') || b.startsWith(a)
+}

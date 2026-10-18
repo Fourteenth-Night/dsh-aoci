@@ -10,56 +10,65 @@
 
 `dsh-aoci` integrates [AOCI-CODE](https://github.com/aoci-spec/aoci-code) — a local-first stdio MCP server and Go CLI implementing the AOCI (AI-Oriented Cognition Infrastructure) paradigm — into the DeepSeek Harness (DSH) plugin ecosystem. It separates **deterministic governance** (initialisation, baseline establishment, verification) from **semantic authorship** (FRAS entries authored by the model under AOCI's governance protocol), and exposes cognition through three complementary surfaces:
 
-- **Nine MCP tools** (`mcp__aoci-<slug>__aoci_rules` / `aoci_overview` / `aoci_get_entries` / `aoci_search` / `aoci_maintain` / `aoci_update_entry` / `aoci_remove_entry` / `aoci_header` / `aoci_report`), registered **on demand** by a dynamic MCP bridge instead of static per-repository configuration;
-- **Eleven deterministic tools** (`aoci_status`, `aoci_verify`, `aoci_check`, `aoci_scan`, `aoci_panel`, `aoci_use`, `aoci_unbind`, `aoci_relations`, `aoci_impact`, `aoci_lineage`, `aoci_db`) for governance, System-Cognition queries, database preflight, and agent-driven repository selection;
-- **One-shot slash command** `/aoci [path]`: with a path, resolves it (absolute, or relative to `defaultRoot`); **without a path, auto-locates the current session’s workspace repository**; runs conditional initialisation/baseline, binds the MCP bridge, and submits the index-build instruction to the current agent via `agent.steer` — cognition onboarding in a single invocation. Optional flags: `--locale`, `--scope`, `--agent`, `--skip-scan`, `--db`.
+- **Nine MCP tools** (`aoci_rules` / `aoci_overview` / `aoci_get_entries` / `aoci_search` / `aoci_maintain` / `aoci_update_entry` / `aoci_remove_entry` / `aoci_header` / `aoci_report`), registered **on demand** by a dynamic MCP bridge instead of static per-repository configuration. With `toolSurface: compact` (default) the model sees only `aoci_overview` plus one aggregate entry `aoci_call { tool, args }` — cutting the tool schema surface by roughly half; `full` exposes all nine directly;
+- **Deterministic tools** for governance, refresh, audit, and queries: `aoci_status`, `aoci_verify`, `aoci_check`, `aoci_use`, `aoci_unbind`, `aoci_refresh`, `aoci_audit`, `aoci_build_status`, plus `aoci_query` (compact: relations/impact/lineage/db merged) or the granular `aoci_scan` / `aoci_panel` / `aoci_relations` / `aoci_impact` / `aoci_lineage` / `aoci_db` (full);
+- **One-shot slash command** `/aoci [path]`: with a path, resolves it (absolute, or relative to `defaultRoot`); **without a path, auto-locates the current session's workspace repository**; runs conditional initialisation/baseline, verifies the binary, binds the MCP bridge, and submits the index-build instruction to the current agent via `agent.steer`. Optional flags: `--locale`, `--scope`, `--agent`, `--skip-scan`, `--db`.
 
-AOCI-CODE is licensed FSL-1.1-MIT (source-available); this plugin **does not bundle** its binary — it guides checksum-verified downloads from the official release channel.
+AOCI-CODE is licensed FSL-1.1-MIT (source-available); this plugin **does not bundle** its binary — it verifies a user-provided binary (SHA-256, minimum version) against the official release channel.
 
 ## Scope and Compatibility
 
-- **Tested runtime**: DSH desktop >= 2.7.0 (API ^1.2.0); harness runtime ^0.1.1-rc.1 || ^0.1.5-alpha.1 (cordis ^4.0.2); web profile.
+- **Tested runtime**: DSH 0.2.0-rc.2 (harness runtime `^0.2.0-rc.2`, cordis `^4.0.4`); web profile. Compatibility metadata declares `^0.2.0-rc.2`.
 - **Peer dependencies** (provided by the host at boot): `@deepseek-ai/cordis`, `dsh-settings`, `dsh-system-prompt`, `dsh-tools`, `dsh-jobs`, `dsh-llm`, `react`, `react-dom`.
 - **Runtime dependencies**: `schemastery`, `@modelcontextprotocol/sdk`.
-- **Prerequisite binary**: `aoci` from the official AOCI-CODE Release (default `C:/aoci/bin/aoci.exe`), verified by SHA-256.
+- **Prerequisite binary**: `aoci` from the official AOCI-CODE Release (default `C:/aoci/bin/aoci.exe`), verified by SHA-256 and a configurable minimum version (`minAociVersion`, default `0.1.0-rc18`; upstream latest is 0.1.0-rc21).
 
 ## Model-Facing Surface
 
 | Surface | Names | Purpose |
 |---|---|---|
-| Cognition reads | `mcp__aoci-<slug>__aoci_rules`, `...__aoci_overview`, `...__aoci_get_entries`, `...__aoci_search` | Load and query the governed cognition map |
-| Cognition maintenance | `...__aoci_maintain`, `...__aoci_update_entry`, `...__aoci_remove_entry` | Incremental, protocol-governed updates |
-| Cognition evidence | `...__aoci_header`, `...__aoci_report` | Index identity and attestation |
-| Deterministic governance | `aoci_status`, `aoci_verify`, `aoci_check`, `aoci_scan`, `aoci_panel` | Health, verification, baseline, panel (status also reports git head/working-dirty drift) |
-| System Cognition | `aoci_relations`, `aoci_impact <object>`, `aoci_lineage` | Dependency projection, impact analysis, lineage binding |
-| Database preflight | `aoci_db <source>` | Read-only `database source access` preflight (env-referenced credentials only) |
+| Cognition reads | `mcp__aoci-<slug>__aoci_overview` (always) · `aoci_call {tool: aoci_rules/aoci_get_entries/aoci_search, args}` (compact) · all nine direct (full) | Load and query the governed cognition map |
+| Cognition maintenance | `aoci_call {tool: aoci_maintain/aoci_update_entry/aoci_remove_entry, args}` (compact) · direct (full) | Incremental, protocol-governed updates |
+| Cognition evidence | `aoci_call {tool: aoci_header/aoci_report, args}` (compact) · direct (full) | Index identity and attestation |
+| Deterministic governance | `aoci_status`, `aoci_verify`, `aoci_check`, `aoci_scan` (full), `aoci_panel` (full) | Health, verification, baseline, panel; status reports binary verification, git head/working-dirty drift, and the active tool surface |
+| Refresh | `aoci_refresh` | Computes the git change set since the last maintained HEAD and returns a batched, incremental maintenance instruction (no full rebuild) |
+| Audit | `aoci_audit` | Runs verify/check, reports HEAD vs maintained-baseline drift and the structured audit-event timeline |
+| Build status | `aoci_build_status` | Recent build/maintain/verify runs and current bindings |
+| System Cognition | `aoci_query {kind: relations\|impact\|lineage\|db}` (compact) · `aoci_relations`, `aoci_impact <object>`, `aoci_lineage`, `aoci_db <source>` (full) | Dependency projection, impact analysis, lineage, database preflight |
 | Agent-driven binding | `aoci_use <path>`, `aoci_unbind <slug>` | Autonomous repository selection |
-| Slash command | `/aoci <path>` | One-shot onboarding (bind + instruct agent to build) |
+| Slash command | `/aoci [path]` | One-shot onboarding (verify + bind + instruct agent to build) |
 
 ## Architecture
 
 ```
-DSH Web GUI (client) ── RPC/HTTP ──▶ DSH Host half (this plugin)
-                                        │ ctx.tools dynamic registration
-                                        ▼
-                              aoci mcp (stdio, spawned on demand)
-                                        │ nine MCP tools
-                                        ▼
-                          repository cognition assets (aoci.txt et al., Git-versioned)
+DSH Host half (this plugin)
+  · ctx.tools dynamic registration (compact or full surface)
+  · deterministic CLI calls via ctx.subprocess (managed: env scrub, timeout, cancel, bounded output)
+  · /aoci command (ctx.commands) + 11-ish deterministic tools
+  · evidence + audit ledgers under state/aoci/ (projects.json, runs.jsonl, aoci-events.jsonl)
+  · compaction bridge (fold AOCI results into receipts, budget-aware recovery hint)
+        │
+        ▼ stdio MCP
+  aoci mcp (per-project, spawned on demand; auto-reconnect on exit/tool failure)
+        │
+        ▼
+  repository cognition assets (aoci.txt et al., Git-versioned, governed)
 ```
 
-1. **Dual-face plugin**: the package root is the host (Node) half; the `./client` export is the browser half registered through DSH's `__ModuleLoader__.load` protocol. State ledgers persist under profile-isolated `state/aoci/` (`projects.json`, `runs.jsonl`).
-2. **Dynamic MCP bridge** (`AociBridge`): spawns `aoci --repo <root> mcp` via Node `child_process`, connects `StdioClientTransport` + `Client` from `@modelcontextprotocol/sdk`, discovers the nine tools, and registers them on `ctx.tools`; unbinding unregisters and terminates the process.
-3. **AOCI governance semantics** (empirically fixed): `init` runs only for uninitialised repositories (probe `aoci.txt`); `scan` runs only when no Baseline exists (probe `.aoci/baseline.json`); existing Baselines are maintained via argument-less `aoci_maintain` plus batch `aoci_update_entry`, proven by `verify`/`check`.
-4. **One-shot command**: `/aoci [path]` (no-arg auto-locates the current workspace) is registered via `ctx.inject(['commands'], …)` and submits the build instruction through `agent.steer(createUserMessage(...))` — the plan-mode submission pattern.
-5. **Compaction-contract bridge**: `compactAociResults` (pure folding of Whole-Index bodies into receipts) and a `compaction/end` recovery hook (`installAociCompactionGuard`) align AOCI's compaction discipline with DSH session compaction.
+1. **Dual-face plugin**: package root is the host (Node) half; `./client` is the browser half registered via DSH's `__ModuleLoader__.load` protocol.
+2. **Dynamic MCP bridge** (`AociBridge`): spawns `aoci --repo <root> mcp` with a **sanitized environment**, connects over stdio, and registers the tool surface; unbinding unregisters tools and terminates the process; process exit or a failed tool call triggers a 2s-backoff reconnect.
+3. **Deterministic execution** goes through `ctx.subprocess` when the host mounts it (scrubbed env, grace-based termination, bounded collected output with spill), falling back to `node:child_process` only when absent.
+4. **AOCI governance semantics** (empirically fixed): `init` only for uninitialised repositories (probe `aoci.txt`); `scan` only when no Baseline exists (probe `.aoci/baseline.json`); maintenance via argument-less `aoci_maintain` + batch `aoci_update_entry`, proven by `verify`/`check`. A successful `verify` records the maintained HEAD, which drives `aoci_refresh` drift detection.
+5. **Token/budget engineering**: compact tool surface; tool results shaped and truncated with a receipt pointer; compaction hook folds AOCI bodies into a single receipt and, given `ctx.tokenMeter` pressure (when available), escalates the recovery guidance (`fold` → `fold+compact`).
+6. **Binary security**: SHA-256 + minimum-version verification with a cached verification record; mismatches block binding with an actionable message.
+7. **Least privilege**: child environments are whitelisted (system vars + `AOCI_DB_*` + explicit `envPassthrough`); `readOnly` mode disables init/scan/maintain; `/aoci/api` routes are off unless `httpRoutes` is enabled.
 
 ## Installation
 
 ### Prerequisites
 
-- A DeepSeek Harness profile (desktop >= 2.7.0 / runtime ^0.1.5-alpha.1 line).
-- The `aoci` binary from the [official AOCI-CODE Release](https://github.com/aoci-spec/aoci-code/releases) (e.g. `aoci_0.1.0-rc18_windows_amd64.zip`), SHA-256 verified against the published `SHA256SUMS` and placed at a stable absolute path (default `C:/aoci/bin/aoci.exe`).
+- A DeepSeek Harness 0.2.0-rc.2 profile (desktop or web).
+- The `aoci` binary from the [official AOCI-CODE Release](https://github.com/aoci-spec/aoci-code/releases) (e.g. `aoci_0.1.0-rc21_windows_amd64.zip`), verified against the published `SHA256SUMS` and placed at a stable absolute path (default `C:/aoci/bin/aoci.exe`).
 
 ### Steps
 
@@ -72,55 +81,60 @@ pnpm pack             # dsh-aoci-<version>.tgz
 dsh plugin --profile <name> add ./dsh-aoci-<version>.tgz
 # restart DSH Desktop, then in the input box:
 #   /aoci D:\path\to\repo        (absolute path)
-#   /aoci ./relative                (requires defaultRoot configured)
+#   /aoci                          (auto-locates the session workspace)
 ```
 
-After `/aoci`, the agent builds the index (rules → full Overview → batched Maintain → verify/check → aligned). Subsequent sessions reuse the same Git-versioned cognition; maintenance is automatic at task completion.
+After `/aoci`, the agent builds the index (overview → batched maintain → verify/check → aligned). Subsequent sessions reuse the Git-versioned cognition; `aoci_refresh` maintains incrementally after changes.
 
 ## Configuration Reference
 
 | Key | Default | Description |
 |---|---|---|
-| `binaryPath` | `C:/aoci/bin/aoci.exe` | Stable absolute path to the verified `aoci` binary. |
-| `defaultRoot` | `` (empty) | Base directory for relative paths in `/aoci` and `aoci_use`. |
+| `binaryPath` | `C:/aoci/bin/aoci.exe` | Stable path to the verified `aoci` binary (auto-detected when empty). |
+| `binarySha256` | `` | Expected SHA-256; mismatch blocks binding. |
+| `minAociVersion` | `0.1.0-rc18` | Minimum accepted `aoci` version (e.g. `0.1.0-rc21`). |
+| `envPassthrough` | `[]` | Extra environment variable names forwarded to `aoci` (whitelist always keeps system vars + `AOCI_DB_*`). |
+| `toolSurface` | `compact` | `compact` (aggregate entry, fewer schemas) or `full` (all nine MCP tools). |
+| `autoRefresh` | `status` | `off` / `status` (drift reported) / `nightly` (runs nightly verify). |
+| `governance` | `standard` | `strict` requires verify+check after maintenance; `relaxed` recommends only. |
+| `readOnly` | `false` | Disables init/scan/maintain writes. |
+| `httpRoutes` | `false` | Mounts the read-only `/aoci/api` routes. |
+| `budget.warn\|fold\|compact` | `0.6\|0.75\|0.9` | Context-pressure thresholds for fold/compact guidance. |
+| `defaultRoot` | `` | Base directory for relative paths in `/aoci` and `aoci_use`. |
 | `mcp.serverNamePrefix` | `aoci` | Namespace prefix for dynamically registered MCP tools. |
 | `mcp.toolCallTimeoutMs` | `120000` | Per-call timeout for bridged MCP tools. |
-| `projects[].root` / `slug` / `locale` | — | Static projects (optional; dynamic binding via `/aoci` needs none). |
-| `projects[].dbSources[]` | `[]` | Database sources (`sourceId`, `engine`, `databaseName`, `namespace`, `credentialEnv`). |
-| `projects[].schedule.cron` | `0 3 * * *` | Nightly health-check schedule (verify-only by default). |
+| `projects[]` | `[]` | Optional static projects (`root`, `slug`, `dbSources`, `schedule`). Dynamic binding needs none. |
 
 ## Verification Methodology
 
-The plugin was validated through four complementary approaches:
-
-1. **Unit tests** (15 cases): slug/credential-reference derivation, five-field cron matching, MCP entry assembly, compaction folding, schema defaults, relative-path resolution.
-2. **End-to-end chain** (real `aoci` 0.1.0-rc18 binary + real Git repository + MCP SDK): `init` succeeded; `scan` established a Baseline (6 files / 586 ms); `verify` emitted JSON; **all nine MCP tools discovered**; `aoci_header` returned index identity over MCP.
-3. **Integration self-test** (real Cordis context + command injection): `/aoci` handler registered, bound 9/9 tools, and `agent.steer` submission succeeded.
-4. **Loader composition**: `dsh --profile web --dump-config` resolves the plugin entry and its configuration without errors.
+1. **Unit tests** (28 cases): slug/credential derivation, cron matching, compaction folding and budget policy, audit report formatting, refresh plan, env whitelist, tool-surface estimation, config defaults.
+2. **End-to-end chain** (real `aoci` 0.1.0-rc18 binary + real Git repository + MCP SDK): init/scan/verify, all nine MCP tools discovered, `aoci_header` over MCP.
+3. **Integration self-test** (real Cordis context): `/aoci` (with path and no-arg auto-location), compact surface bound 2/2 tools, status reports binary verification (SHA-256 + version), `aoci_query` relations/db, `aoci_refresh` drift plan, `aoci_audit` report, `aoci_build_status`, unbind.
+4. **Loader composition**: `dsh --profile web --dump-config` resolves the plugin entry without errors.
 
 ## Known Limitations
 
-- Background scheduling is not guaranteed after the application fully exits.
-- Initial index construction grows with repository size (≈1 hour per 200K lines) and consumes API quota.
-- Dynamic-bridge process lifecycle (crash reconnection) can be strengthened further.
-- Database cognition (MySQL/PostgreSQL/openGauss table-level FRAS) and embedding the `aoci ui` panel are later milestones.
+- Background scheduling (including `autoRefresh: nightly`) is not guaranteed after the host application fully exits.
+- Initial index construction grows with repository size (≈1 hour per 200K lines) and consumes model quota; use `aoci_refresh` for incremental maintenance.
+- `ctx.subprocess` availability depends on the host composition; the fallback path is less protected.
+- Database cognition covers schema metadata only (no business-data access).
 
 ## Security Considerations
 
 - Credentials are referenced exclusively through environment-variable names (`AOCI_DB_<ID>_DSN`); the plugin never stores or embeds secrets.
-- The `aoci` binary is downloaded from the official Release and verified by SHA-256; it is not bundled or redistributed (FSL-1.1-MIT).
-- MCP/subprocess environments are scrubbed of credential-shaped variables before merging explicit overrides.
-- All `/aoci/*` panel routes are loopback-only.
+- Child environments are whitelisted; credential-shaped variables are not forwarded implicitly.
+- The `aoci` binary is never bundled or redistributed (FSL-1.1-MIT); it is verified by SHA-256 and a minimum version before use.
+- `/aoci/api` routes are disabled by default and remain loopback-only when enabled.
 
 ## Acknowledgments
 
 The authors wish to thank:
 
 - The **AOCI-CODE team** and the authors of *AOCI: Symbolic-Semantic Indexing for Practical Repository-Scale Code Understanding with LLMs* (arXiv:2605.02421), whose governed cognition paradigm and local-first MCP server make this plugin possible.
-- The **DeepSeek Harness SDK team** for the plugin protocols this work builds upon — sandbox context and injection declarations, `ctx.tools`, `ctx.commands`, and the `__ModuleLoader__.load` frontend contract.
+- The **DeepSeek Harness SDK team** for the plugin protocols this work builds upon — sandbox context and injection declarations, `ctx.tools`/`ctx.commands`/`ctx.subprocess`/`ctx.tokenMeter` seams, compaction contract, and the `__ModuleLoader__.load` frontend contract.
 - The maintainers of `dsh-task-board` (@linxin666/dsh-web-ui) and `dsh-better-sidebar` (omdsh-dev/DSH-better-sidebar), whose dual-face plugin architecture and manifest protocols were direct references.
 - `dsh-plan-mode` (@deepseek-ai/dsh-plan-mode) for the `ctx.inject(['commands'], …)` registration and `agent.steer` submission patterns.
-- Early adopters and reviewers whose real-environment feedback drove the 0.1.x fix cycle.
+- Early adopters and reviewers whose real-environment feedback drove the fix cycles.
 
 See [RELEASE.md](RELEASE.md) for the full version history and acknowledgements.
 

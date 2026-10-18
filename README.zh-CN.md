@@ -8,120 +8,114 @@
 
 ## 摘要
 
-`dsh-aoci` 将 [AOCI-CODE](https://github.com/aoci-spec/aoci-code)（实现 AOCI——AI 面向认知基础设施——范式的本地优先 stdio MCP 服务器与 Go CLI）接入 DeepSeek Harness（DSH）插件生态。它将**确定性治理**（初始化、基线建立、验证）与**语义创作**（由模型在 AOCI 治理协议约束下撰写 FRAS 条目）相分离，并通过三个互补的模型可见面暴露认知：
+`dsh-aoci` 将 [AOCI-CODE](https://github.com/aoci-spec/aoci-code)（本地优先的 stdio MCP 服务器 + Go CLI，实现 AOCI 认知范式）接入 DeepSeek Harness（DSH）插件生态，并严格区分**确定性治理**（初始化/基线/验证）与**语义创作**（由模型按 AOCI 协议撰写 FRAS 条目），通过三类互补面暴露认知：
 
-- **九个 MCP 工具**（`mcp__aoci-<slug>__aoci_rules` / `aoci_overview` / `aoci_get_entries` / `aoci_search` / `aoci_maintain` / `aoci_update_entry` / `aoci_remove_entry` / `aoci_header` / `aoci_report`），由**动态 MCP 桥**按需注册，免去"每仓库一条静态配置 + 重启"；
-- **十一个确定性工具**（`aoci_status`、`aoci_verify`、`aoci_check`、`aoci_scan`、`aoci_panel`、`aoci_use`、`aoci_unbind`、`aoci_relations`、`aoci_impact`、`aoci_lineage`、`aoci_db`），承担治理、System Cognition 查询、数据库预检与智能体自主选路；
-- **一键斜杠命令** `/aoci [路径]`：带路径时解析（绝对路径，或相对 `defaultRoot`）；**不带路径时自动定位当前会话工作区仓库**；条件初始化/建基线 → 绑定 MCP 桥 → 经 `agent.steer` 向当前智能体提交建索引指令——**一次调用完成认知接入**。可选标志：`--locale`、`--scope`、`--agent`、`--skip-scan`、`--db`。
+- **九个 MCP 工具**（`aoci_rules`/`aoci_overview`/`aoci_get_entries`/`aoci_search`/`aoci_maintain`/`aoci_update_entry`/`aoci_remove_entry`/`aoci_header`/`aoci_report`），由动态 MCP 桥按需注册；`toolSurface: compact`（默认）下模型只看到 `aoci_overview` + 聚合入口 `aoci_call {tool,args}`（工具 schema 体积约减半），`full` 直接暴露九工具；
+- **确定性工具**：`aoci_status`、`aoci_verify`、`aoci_check`、`aoci_use`、`aoci_unbind`、`aoci_refresh`（增量刷新）、`aoci_audit`（审计报告）、`aoci_build_status`，以及 `aoci_query`（compact 合并 relations/impact/lineage/db）或全量 `aoci_scan`/`aoci_panel`/`aoci_relations`/`aoci_impact`/`aoci_lineage`/`aoci_db`；
+- **一键斜杠命令** `/aoci [路径]`：带路径解析（绝对或相对 `defaultRoot`）；**不带路径自动定位当前会话工作区**；校验二进制 → 条件 init/scan → 绑定 MCP 桥 → 经 `agent.steer` 指示当前 AI 建索引；可选 `--locale/--scope/--agent/--skip-scan/--db`。
 
-AOCI-CODE 采用 FSL-1.1-MIT（source-available）许可；本插件**不捆绑**其二进制——仅引导从官方发布渠道下载并做 SHA-256 校验。
+AOCI-CODE 采用 FSL-1.1-MIT（source-available）；本插件**不捆绑**其二进制，仅对用户提供的二进制做 SHA-256 与最低版本校验。
 
 ## 适用范围与兼容性
 
-- **实测运行环境**：DSH Desktop >= 2.7.0（API ^1.2.0）；harness 运行时 ^0.1.1-rc.1 || ^0.1.5-alpha.1（cordis ^4.0.2）；web profile。
-- **Peer 依赖**（宿主启动时提供）：`@deepseek-ai/cordis`、`dsh-settings`、`dsh-system-prompt`、`dsh-tools`、`dsh-jobs`、`dsh-llm`、`react`、`react-dom`。
+- **实测运行环境**：DSH 0.2.0-rc.2（harness 运行时 `^0.2.0-rc.2`，cordis `^4.0.4`）；web profile。
+- **Peer 依赖**（宿主提供）：`@deepseek-ai/cordis`、`dsh-settings`、`dsh-system-prompt`、`dsh-tools`、`dsh-jobs`、`dsh-llm`、`react`、`react-dom`。
 - **运行时依赖**：`schemastery`、`@modelcontextprotocol/sdk`。
-- **前置二进制**：官方 AOCI-CODE Release 下载并 SHA-256 校验的 `aoci`（默认 `C:/aoci/bin/aoci.exe`）。
+- **前置二进制**：官方 AOCI-CODE Release 的 `aoci`（默认 `C:/aoci/bin/aoci.exe`），SHA-256 + 最低版本（`minAociVersion`，默认 `0.1.0-rc18`；上游最新 rc21）校验。
 
 ## 模型可见面
 
 | 面 | 名称 | 用途 |
 |---|---|---|
-| 认知读取 | `mcp__aoci-<slug>__aoci_rules`、`...__aoci_overview`、`...__aoci_get_entries`、`...__aoci_search` | 加载与检索受治理的认知地图 |
-| 认知维护 | `...__aoci_maintain`、`...__aoci_update_entry`、`...__aoci_remove_entry` | 协议约束下的增量更新 |
-| 认知证据 | `...__aoci_header`、`...__aoci_report` | 索引身份与 attestation |
-| 确定性治理 | `aoci_status`、`aoci_verify`、`aoci_check`、`aoci_scan`、`aoci_panel` | 健康、验证、基线、面板（status 同时报告 git head/工作区漂移） |
-| System Cognition | `aoci_relations`、`aoci_impact <object>`、`aoci_lineage` | 依赖投影、影响分析、来源绑定链 |
-| 数据库预检 | `aoci_db <source>` | 只读 `database source access` 预检（凭据仅环境变量引用） |
-| 智能体自主选路 | `aoci_use <路径>`、`aoci_unbind <slug>` | 按需绑定/解绑仓库 |
-| 斜杠命令 | `/aoci <路径>` | 一键接入（绑定 + 指示 AI 建索引） |
+| 认知读取 | `aoci_overview`（始终）+ `aoci_call`（compact）或九工具直连（full） | 加载与检索受治理认知 |
+| 认知维护 | `aoci_call {tool: aoci_maintain/aoci_update_entry/…}` 或直连 | 协议约束下的增量更新 |
+| 认知证据 | `aoci_call {tool: aoci_header/aoci_report}` 或直连 | 索引身份与 attestation |
+| 确定性治理 | `aoci_status`、`aoci_verify`、`aoci_check`、`aoci_scan`(full)、`aoci_panel`(full) | 健康/验证/基线/面板；status 含二进制校验、git 漂移与工具面 |
+| 刷新 | `aoci_refresh` | 计算上次维护 HEAD 以来的 git 变更集，给出分批增量维护指令 |
+| 审计 | `aoci_audit` | verify/check + HEAD 漂移 + 结构化事件时间线 |
+| 构建状态 | `aoci_build_status` | 最近构建/维护/验证记录与绑定 |
+| 系统查询 | `aoci_query {kind}`(compact) 或 `aoci_relations`/`aoci_impact`/`aoci_lineage`/`aoci_db`(full) | 依赖投影/影响分析/来源链/数据库预检 |
+| 自主选路 | `aoci_use`、`aoci_unbind` | 按需绑定/解绑仓库 |
+| 斜杠命令 | `/aoci [路径]` | 一键接入（校验 + 绑定 + 指示建索引） |
 
-## 架构
+## 架构要点
 
-```
-DSH Web GUI (client) ── RPC/HTTP ──▶ DSH Host 半边（本插件）
-                                        │ ctx.tools 动态注册
-                                        ▼
-                              aoci mcp（stdio，按需拉起）
-                                        │ 九 MCP 工具
-                                        ▼
-                          仓库认知资产（aoci.txt 等，Git 版本化）
-```
-
-1. **双面插件**：包根为宿主（Node）半边；`./client` 导出为浏览器半边，经 DSH 的 `__ModuleLoader__.load` 协议注册。状态账本持久化于 profile 隔离的 `state/aoci/`（`projects.json`、`runs.jsonl`）。
-2. **动态 MCP 桥**（`AociBridge`）：经 Node `child_process` 拉起 `aoci --repo <root> mcp`，以 `@modelcontextprotocol/sdk` 的 `StdioClientTransport` + `Client` 连接，发现九工具并注册到 `ctx.tools`；解绑时注销并终止进程。
-3. **AOCI 治理语义**（实测固化）：`init` 仅对未初始化仓库执行（探测 `aoci.txt`）；`scan` 仅在没有基线时执行（探测 `.aoci/baseline.json`）；既有基线以无参 `aoci_maintain` + 整批 `aoci_update_entry` 维护，由 `verify`/`check` 证明。
-4. **一键命令**：`/aoci [路径]`（无参自动定位当前工作区）经 `ctx.inject(['commands'], …)` 注册，并以 `agent.steer(createUserMessage(...))`（plan-mode 提交模式）提交建索引指令。
-5. **压缩契约桥接**：`compactAociResults`（将 Whole-Index 正文折叠为 receipt 的纯函数）与 `compaction/end` 恢复钩子（`installAociCompactionGuard`）将 AOCI 压缩纪律对齐到 DSH 会话压缩。
+1. **双面插件**：包根为宿主半边；`./client` 为浏览器半边（`__ModuleLoader__.load` 协议）。
+2. **动态 MCP 桥**：以**清洗后的环境**拉起 `aoci --repo <root> mcp`，stdio 连接并注册工具；解绑注销并终止进程；退出/调用失败 2s 退避重连。
+3. **确定性执行**：优先 `ctx.subprocess` 受管进程（env 清洗、grace 终止、有界输出），缺失时降级 `node:child_process`。
+4. **治理语义**：init 仅未初始化仓库（探测 `aoci.txt`）；scan 仅无基线时（探测 `.aoci/baseline.json`）；维护走无参 `aoci_maintain` + 整批 `aoci_update_entry`，`verify`/`check` 证明 aligned；verify 成功记录维护基线 HEAD，驱动 `aoci_refresh` 漂移检测。
+5. **Token/预算工程**：compact 工具面；结果整形截断 + receipt 指针；压缩钩子折叠 AOCI 正文为单条 receipt，并在 `ctx.tokenMeter` 可用时按压力升级恢复提示（fold → fold+compact）。
+6. **二进制安全**：SHA-256 + 最低版本校验 + 校验缓存；不匹配时阻止绑定并给出可操作提示。
+7. **最小权限**：子进程环境白名单（系统变量 + `AOCI_DB_*` + 显式 `envPassthrough`）；`readOnly` 禁止写操作；`/aoci/api` 默认关闭。
 
 ## 安装
 
 ### 前置
 
-- DeepSeek Harness profile（desktop >= 2.7.0 / runtime ^0.1.5-alpha.1 线）。
-- 从[官方 AOCI-CODE Release](https://github.com/aoci-spec/aoci-code/releases)下载 `aoci` 二进制（如 `aoci_0.1.0-rc18_windows_amd64.zip`），对照发布的 `SHA256SUMS` 做 SHA-256 校验，放到稳定绝对路径（默认 `C:/aoci/bin/aoci.exe`）。
+- DSH 0.2.0-rc.2 profile（desktop 或 web）。
+- 官方 Release 的 `aoci` 二进制（如 `aoci_0.1.0-rc21_windows_amd64.zip`），按 `SHA256SUMS` 校验后放到稳定绝对路径（默认 `C:/aoci/bin/aoci.exe`）。
 
 ### 步骤
 
 ```powershell
-cd <插件工程目录>
+cd <plugin-checkout>
 pnpm install
-pnpm check            # typecheck + 单测 + 构建
-pnpm pack             # dsh-aoci-<version>.tgz
-
+pnpm check
+pnpm pack
 dsh plugin --profile <name> add ./dsh-aoci-<version>.tgz
-# 重启 DSH Desktop 后，在输入框执行：
-#   /aoci D:\path\to\repo        （绝对路径）
-#   /aoci ./relative                （需先配置 defaultRoot）
+# 重启后输入：
+#   /aoci D:\path\to\repo   （绝对路径）
+#   /aoci                     （自动定位当前工作区）
 ```
 
-`/aoci` 之后，智能体将构建索引（rules → 完整 Overview → 分批 Maintain → verify/check → aligned）。后续会话复用同一份 Git 版本化认知；任务收尾自动维护。
+## 配置项
 
-## 配置参考
-
-| 键 | 默认值 | 说明 |
+| 键 | 默认 | 说明 |
 |---|---|---|
-| `binaryPath` | `C:/aoci/bin/aoci.exe` | 已验证 `aoci` 二进制的稳定绝对路径。 |
-| `defaultRoot` | ``（空） | `/aoci` 与 `aoci_use` 相对路径的解析基准目录。 |
-| `mcp.serverNamePrefix` | `aoci` | 动态注册 MCP 工具的命名空间前缀。 |
-| `mcp.toolCallTimeoutMs` | `120000` | 桥接 MCP 工具的单次调用超时。 |
-| `projects[].root` / `slug` / `locale` | — | 静态项目（可选；动态绑定无需预配置）。 |
-| `projects[].dbSources[]` | `[]` | 数据库数据源（`sourceId`、`engine`、`databaseName`、`namespace`、`credentialEnv`）。 |
-| `projects[].schedule.cron` | `0 3 * * *` | 夜间健康检查（默认仅 verify）。 |
+| `binaryPath` | `C:/aoci/bin/aoci.exe` | aoci 二进制路径（留空自动探测） |
+| `binarySha256` | `` | 期望 SHA-256；不匹配拒绝使用 |
+| `minAociVersion` | `0.1.0-rc18` | 最低版本（建议随上游升至 rc21） |
+| `envPassthrough` | `[]` | 额外透传的环境变量名（白名单恒含系统变量与 `AOCI_DB_*`） |
+| `toolSurface` | `compact` | 工具面 compact/full |
+| `autoRefresh` | `status` | off/status/nightly（夜间自动 verify） |
+| `governance` | `standard` | strict 强制 verify+check；relaxed 仅建议 |
+| `readOnly` | `false` | 只读模式（禁 init/scan/maintain） |
+| `httpRoutes` | `false` | 挂载只读 `/aoci/api` |
+| `budget.warn/fold/compact` | `0.6/0.75/0.9` | 上下文压力阈值 |
+| `defaultRoot` | `` | 相对路径基准 |
+| `mcp.serverNamePrefix` / `toolCallTimeoutMs` | `aoci` / `120000` | 命名空间前缀与调用超时 |
+| `projects[]` | `[]` | 可选静态项目（动态绑定不需要） |
 
 ## 验证方法
 
-插件经四种互补方式验证：
+1. **单元测试 28 例**：slug/凭据派生、cron、压缩折叠与预算策略、审计报告、刷新计划、环境白名单、工具面估算、配置默认值；
+2. **端到端链路**（真实 rc18 二进制 + Git 仓库 + MCP SDK）：init/scan/verify、九工具发现、`aoci_header`；
+3. **集成自测**（真实 Cordis）：`/aoci` 带参/无参、compact 面 2/2 工具、status 含二进制校验、`aoci_query`、`aoci_refresh`、`aoci_audit`、`aoci_build_status`、解绑；
+4. **组合加载**：`dsh --profile web --dump-config` 正常解析。
 
-1. **单元测试**（15 例）：slug/凭据引用派生、五段 cron 匹配、MCP 条目组装、压缩折叠、schema 默认值、相对路径解析。
-2. **端到端链路**（真实 `aoci` 0.1.0-rc18 二进制 + 真实 Git 仓库 + MCP SDK）：`init` 成功；`scan` 建立基线（6 文件 / 586ms）；`verify` 输出 JSON；**九个 MCP 工具全部发现**；`aoci_header` 经 MCP 返回索引身份。
-3. **集成自测**（真实 Cordis 上下文 + 命令注入）：`/aoci` handler 注册、绑定 9/9 工具、`agent.steer` 提交成功。
-4. **加载器合成**：`dsh --profile web --dump-config` 无错误解析插件条目与配置。
+## 已知限制
 
-## 已知局限
+- 宿主完全退出后后台调度（含 nightly）不保证执行；
+- 首次建索引随仓库规模增长（≈1h/20 万行）并消耗模型额度——用 `aoci_refresh` 做增量维护；
+- `ctx.subprocess` 取决于宿主组合，降级路径保护较弱；
+- 数据库认知仅表结构元数据（不读业务数据）。
 
-- 应用完全退出后不承诺后台调度继续执行。
-- 首次建索引耗时随规模增长（约 1 小时 / 20 万行）且消耗 API 额度。
-- 动态桥进程生命周期管理（崩溃重连）仍可强化。
-- 数据库认知（MySQL/PostgreSQL/openGauss 表级 FRAS）与 `aoci ui` 面板内嵌为后续里程碑。
+## 安全
 
-## 安全说明
-
-- 凭据仅以环境变量名引用（`AOCI_DB_<ID>_DSN`）；插件从不存储或嵌入密钥。
-- `aoci` 二进制从官方 Release 下载并 SHA-256 校验；不捆绑、不分发（FSL-1.1-MIT）。
-- MCP/子进程环境在合并显式覆盖前会清洗形似凭据的变量。
-- 所有 `/aoci/*` 面板路由仅限 loopback。
+- 凭据仅以环境变量名引用（`AOCI_DB_<ID>_DSN`），不存储密钥；
+- 子进程环境白名单，凭据形态变量不隐式透传；
+- 不捆绑/不再分发 aoci 二进制；使用前 SHA-256 + 最低版本校验；
+- `/aoci/api` 默认关闭，启用时仅 loopback。
 
 ## 致谢
 
-- **AOCI-CODE 团队**与《AOCI: Symbolic-Semantic Indexing for Practical Repository-Scale Code Understanding with LLMs》作者（arXiv:2605.02421）—— 受治理的认知范式与本地优先 MCP 服务器是本插件的基础。
-- **DeepSeek Harness SDK 团队** —— 沙箱上下文与注入声明、`ctx.tools`、`ctx.commands`、`__ModuleLoader__.load` 前端契约等插件协议。
-- **`dsh-task-board`（@linxin666/dsh-web-ui）与 `dsh-better-sidebar`（omdsh-dev/DSH-better-sidebar）维护者** —— 双面插件架构与清单协议的直接参照。
-- **`dsh-plan-mode`（@deepseek-ai/dsh-plan-mode）** —— `ctx.inject(['commands'], …)` 注册与 `agent.steer` 提交模式。
-- 早期试用者与审阅者 —— 真实环境反馈驱动了 0.1.x 修复周期。
+- **AOCI-CODE 团队**与论文作者（arXiv:2605.02421）——认知范式与本地优先 MCP 服务器；
+- **DeepSeek Harness SDK 团队**——插件协议与 `ctx.tools`/`ctx.commands`/`ctx.subprocess`/`ctx.tokenMeter` seam、压缩契约、`__ModuleLoader__` 协议；
+- `dsh-task-board`、`dsh-better-sidebar`、`dsh-plan-mode` 等开源实现的借鉴；
+- 提供真实环境反馈的早期用户与社区成员。
 
-完整版本历史与致谢见 [RELEASE.md](RELEASE.md)。
+完整版本史与致谢见 [RELEASE.md](RELEASE.md)。
 
 ## 许可与归属
 
-MIT License（见 [LICENSE](LICENSE)）。AOCI-CODE 采用 FSL-1.1-MIT（source-available，[github.com/aoci-spec/aoci-code](https://github.com/aoci-spec/aoci-code)）；本项目不持有、不分发 AOCI-CODE 二进制。设计文档见 [docs/DESIGN.md](docs/DESIGN.md)。
+MIT（见 [LICENSE](LICENSE)）。AOCI-CODE 为 FSL-1.1-MIT（source-available）；本项目不持有/分发其二进制。设计理由见 [docs/DESIGN.md](docs/DESIGN.md)。

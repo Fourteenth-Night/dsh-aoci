@@ -1,12 +1,16 @@
-// 动态 MCP 桥：按需拉起 aoci --repo <root> mcp，连接并把 9 个工具动态注册进 ctx.tools
-// 命名与 dsh-mcp-client 一致：mcp__aoci-<slug>__<tool>。含进程健康监视与自动重连。
+// 动态 MCP 桥：按需拉起 aoci --repo <root> mcp，连接并把工具动态注册进 ctx.tools
+// 命名与 dsh-mcp-client 一致：mcp__aoci-<slug>__<tool>。
+// toolSurface=compact 时只注册 aoci_overview + 聚合入口 aoci_call（省 token）；full 注册全部九工具。
+// 含进程健康监视与自动重连；子进程环境经白名单清洗。
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Context } from '@deepseek-ai/cordis'
 import { AOCI_TOOLS } from './types'
-import { slugFromRoot, mcpServerName } from './util'
+import { slugFromRoot, mcpServerName, sanitizedEnv, compactToolResult } from './util'
 import { safeLogger } from './logger'
+
+export type ToolSurface = 'compact' | 'full'
 
 export interface BindResult {
   ok: boolean
@@ -28,10 +32,29 @@ interface BoundServer {
   retryTimer?: ReturnType<typeof setTimeout>
 }
 
+/** 把 MCP 工具结果（content 数组）整形为模型友好的短文本 */
+function shapeMcpResult(res: unknown): string {
+  const r = res as { content?: unknown; isError?: boolean }
+  let text = ''
+  const content = r.content
+  if (Array.isArray(content)) {
+    text = content.map((c) => (c as { text?: string })?.text ?? '').join('')
+    if (!text) text = JSON.stringify(content)
+  } else if (typeof content === 'string') {
+    text = content
+  } else {
+    text = JSON.stringify(res)
+  }
+  return compactToolResult(text)
+}
+
 export class AociBridge {
   private bound = new Map<string, BoundServer>()
+  private readonly surface: ToolSurface
 
-  constructor(private readonly ctx: Context) {}
+  constructor(private readonly ctx: Context, opts: { surface?: ToolSurface } = {}) {
+    this.surface = opts.surface ?? 'compact'
+  }
 
   private toolsRegistry(): { register(t: unknown): () => void } {
     return (this.ctx as unknown as { tools: { register(t: unknown): () => void } }).tools
@@ -47,14 +70,20 @@ export class AociBridge {
 
   isBound(slug: string): boolean { return this.bound.has(slug) }
 
+  /** 当前绑定暴露的工具名（用于状态展示与 token 估算） */
+  boundTools(slug: string): string[] {
+    const entry = this.bound.get(slug)
+    if (!entry) return []
+    return this.surface === 'full' ? [...AOCI_TOOLS] : ['aoci_overview', 'aoci_call']
+  }
+
   async bind(root: string, binaryPath: string): Promise<BindResult> {
     const self = this
     const slug = slugFromRoot(root)
     const namespace = mcpServerName('aoci', slug)
-    const tools = AOCI_TOOLS.map((t) => 'mcp__' + namespace + '__' + t)
     const existing = this.bound.get(slug)
     if (existing && !existing.rebinding) {
-      return { ok: true, slug, namespace, tools, message: '项目 ' + slug + ' 已绑定（复用现有 aoci mcp 服务器）' }
+      return { ok: true, slug, namespace, tools: this.boundTools(slug), message: '项目 ' + slug + ' 已绑定（复用现有 aoci mcp 服务器）' }
     }
     if (existing) await this.unbindInternal(slug)
 
@@ -64,39 +93,72 @@ export class AociBridge {
       transport = new StdioClientTransport({
         command: binaryPath,
         args: ['--repo', root, 'mcp'],
-        env: process.env as unknown as Record<string, string>,
+        env: sanitizedEnv(),
         stderr: 'pipe',
       })
       client = new Client({ name: 'dsh-aoci', version: '0.2.0' }, { capabilities: {} })
       await client.connect(transport)
       await client.listTools()
     } catch (e) {
-      return { ok: false, slug, namespace, tools, message: '绑定失败（无法连接 aoci mcp）：' + (e as Error).message }
+      return { ok: false, slug, namespace, tools: [], message: '绑定失败（无法连接 aoci mcp）：' + (e as Error).message }
     }
 
     const disposers: Array<() => void> = []
-    for (const raw of AOCI_TOOLS) {
+    const registerDirect = (raw: string) => {
+      const name = 'mcp__' + namespace + '__' + raw
+      const def = defineTool({
+        name,
+        description: directDescription(raw),
+        parameters: { input: { type: 'json', description: '调用参数（JSON 对象，按工具 schema 传入）' } },
+        output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: String(v) }] },
+        async execute(args) {
+          try {
+            const res = await client.callTool({ name: raw, arguments: (args as { input?: Record<string, unknown> }).input ?? {} })
+            const r = res as { isError?: boolean }
+            if (r.isError) throw new Error(JSON.stringify(res))
+            return shapeMcpResult(res)
+          } catch (e) {
+            self.requestRebind(slug, '工具调用失败: ' + String((e as Error).message).slice(0, 160))
+            throw e
+          }
+        },
+      })
+      disposers.push(this.toolsRegistry().register(def))
+    }
+
+    const direct = this.surface === 'full' ? AOCI_TOOLS : ['aoci_overview']
+    for (const raw of direct) {
+      try { registerDirect(raw) } catch { /* 单个工具注册失败不阻塞其余 */ }
+    }
+
+    // 聚合入口：aoci_call { tool, args }（compact 模式覆盖其余全部九工具）
+    if (this.surface === 'compact') {
       try {
-        const name = 'mcp__' + namespace + '__' + raw
+        const callName = 'mcp__' + namespace + '__aoci_call'
         const def = defineTool({
-          name,
-          description: 'AOCI ' + raw + ' · 项目 ' + slug + '（' + root + '）',
-          parameters: { input: { type: 'json', description: '调用参数（JSON 对象，按工具 schema 传入）' } },
+          name: callName,
+          description: 'AOCI 任意认知工具聚合入口（项目 ' + slug + '）。tool 取九工具之一：' + AOCI_TOOLS.join(' / ') + '；args 为对应工具参数 JSON。',
+          parameters: {
+            tool: { type: 'string', required: true, description: '九工具之一：' + AOCI_TOOLS.join(', ') },
+            args: { type: 'json', description: '工具参数 JSON（如 {"refresh_event_id":"…"}）' },
+          },
           output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: String(v) }] },
           async execute(args) {
+            const tool = String((args as { tool?: string }).tool ?? '')
+            if (!AOCI_TOOLS.includes(tool as never)) throw new Error('未知 AOCI 工具: ' + tool + '；可选: ' + AOCI_TOOLS.join(', '))
             try {
-              const res = await client.callTool({ name: raw, arguments: (args as { input?: Record<string, unknown> }).input ?? ({} as Record<string, unknown>) })
-              const r = res as { content?: unknown; isError?: boolean }
-              if (r.isError) throw new Error(JSON.stringify(r.content ?? res))
-              return JSON.stringify(r.content ?? res)
+              const res = await client.callTool({ name: tool, arguments: ((args as { args?: Record<string, unknown> }).args ?? {}) })
+              const r = res as { isError?: boolean }
+              if (r.isError) throw new Error(JSON.stringify(res))
+              return shapeMcpResult(res)
             } catch (e) {
-              self.requestRebind(slug, '工具调用失败: ' + String((e as Error).message).slice(0, 160))
+              self.requestRebind(slug, '聚合调用失败: ' + String((e as Error).message).slice(0, 160))
               throw e
             }
           },
         })
         disposers.push(this.toolsRegistry().register(def))
-      } catch { /* 单个工具注册失败不阻塞其余 */ }
+      } catch { /* ignore */ }
     }
 
     const entry: BoundServer = { slug, namespace, root, binaryPath, transport, client, disposers, rebinding: false }
@@ -105,10 +167,11 @@ export class AociBridge {
       ;(child as { on(e: string, cb: () => void): void }).on('exit', () => self.requestRebind(slug, 'aoci mcp 进程退出'))
     }
     this.bound.set(slug, entry)
-    safeLogger(this.ctx).info('dsh-aoci: 桥已绑定 ' + slug + '（' + disposers.length + '/' + AOCI_TOOLS.length + ' 工具）')
+    const tools = this.boundTools(slug)
+    safeLogger(this.ctx).info('dsh-aoci: 桥已绑定 ' + slug + '（' + tools.length + ' 工具, surface=' + this.surface + '）')
     return {
       ok: true, slug, namespace, tools,
-      message: '已绑定 ' + slug + '：aoci mcp 服务器已拉起，' + disposers.length + '/' + AOCI_TOOLS.length + ' 个工具注册成功。接下来请调用 mcp__' + namespace + '__aoci_rules 与 aoci_overview 建立认知。',
+      message: '已绑定 ' + slug + '：aoci mcp 服务器已拉起，' + tools.length + ' 个工具注册成功（' + this.surface + '）。接下来请调用 ' + (tools[0] ? 'mcp__' + namespace + '__' + tools[0] : 'aoci_overview') + ' 建立认知。',
     }
   }
 
@@ -152,4 +215,20 @@ export class AociBridge {
   async dispose(): Promise<void> {
     for (const slug of [...this.bound.keys()]) await this.unbindInternal(slug)
   }
+}
+
+/** 直接暴露的 MCP 工具描述（短描述以省 token） */
+function directDescription(raw: string): string {
+  const map: Record<string, string> = {
+    aoci_overview: '读取完整系统认知（架构/职责/关系/契约/约束/标签/FRAS 纪律）；超传输阈值时跟 next_cursor 到 completed=true 并提交 attestation。',
+    aoci_rules: '读取 AOCI 行为契约。',
+    aoci_get_entries: '按条件读取条目。',
+    aoci_search: '检索条目。',
+    aoci_maintain: '维护索引（无参触发语义漂移计算）。',
+    aoci_update_entry: '整批提交语义候选条目。',
+    aoci_remove_entry: '移除条目。',
+    aoci_header: '读取索引身份与卷头。',
+    aoci_report: '生成治理/证据报告。',
+  }
+  return 'AOCI ' + raw + '：' + (map[raw] ?? 'AOCI 工具')
 }

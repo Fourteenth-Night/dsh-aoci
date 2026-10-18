@@ -1,14 +1,15 @@
-// /aoci 斜杠命令：一键建立 AOCI 认知（init/scan + 绑定 9 个 MCP 工具，并让当前 AI 立即开始建索引）
+// /aoci 斜杠命令：一键建立 AOCI 认知（init/scan + 绑定 MCP 桥，并让当前 AI 立即开始建索引）
 // 注册采用 ctx.inject(['commands'], cb)（dsh-plan-mode 同款），消除服务挂载顺序问题；结果写入日志便于排障
 import type { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { promises as fsP } from 'node:fs'
 import { join } from 'node:path'
 import { safeGet, resolveProjectPath, slugFromRoot, parseAociInput, detectAociBinary } from './util'
-import { isGitRepo } from './workspace'
-import { inspectBinary, installHint } from './aoci-bin'
+import { isGitRepo, gitHead } from './workspace'
+import { installHint } from './aoci-bin'
 import { runAoci } from './cli'
 import { safeLogger } from './logger'
+import { appendAudit } from './audit'
 import type { AociBridge } from './bridge'
 import type { EvidenceStore } from './evidence'
 
@@ -17,6 +18,10 @@ export interface AociCommandDeps {
   bridge: AociBridge
   binaryPath(): Promise<string | undefined>
   defaultRoot?: string
+  readOnly?: boolean
+  governance?: 'strict' | 'standard' | 'relaxed'
+  verifyBinary?(): Promise<{ ok: boolean; version?: string; sha256?: string; reason?: string }>
+  stateDir?: string
 }
 
 interface CommandResult { kind: 'success' | 'error'; text: string }
@@ -27,13 +32,16 @@ export function installAociCommand(ctx: Context, deps: AociCommandDeps) {
 
   const spec = {
     name: 'aoci',
-    description: '为指定 Git 仓库一键建立 AOCI 认知：init/scan + 绑定 9 个 MCP 工具，并让当前 AI 立即开始建索引',
-    input: { hint: '<路径>（绝对路径，或相对 defaultRoot 的相对路径）' },
+    description: '为指定 Git 仓库一键建立 AOCI 认知：init/scan + 绑定 MCP 桥，并让当前 AI 立即开始建索引',
+    input: { hint: '[路径] [--locale zh-CN] [--scope full] [--agent claude] [--skip-scan] [--db primary]' },
     handler: async ({ agent, rawInput }: { agent: CommandAgent; rawInput: string }): Promise<CommandResult> => {
       try {
+        if (deps.readOnly) return { kind: 'error', text: '只读模式：已禁止 init/scan/维护写操作。' }
         const flags = parseAociInput(rawInput ?? '')
         const binary = (await deps.binaryPath()) ?? detectAociBinary()
         if (!binary) return { kind: 'error', text: installHint() }
+        const ver = deps.verifyBinary ? await deps.verifyBinary() : undefined
+        if (ver && !ver.ok) return { kind: 'error', text: '二进制校验失败：' + (ver.reason ?? '未知原因') + '\n' + installHint() }
         let resolved = flags.path ? resolveProjectPath(flags.path, deps.defaultRoot) : undefined
         if (!resolved) {
           // 无参：尝试自动定位当前会话工作区仓库
@@ -43,7 +51,7 @@ export function installAociCommand(ctx: Context, deps: AociCommandDeps) {
             if (cwd) resolved = resolveProjectPath(cwd, undefined)
           } catch { /* ignore */ }
         }
-        if (!resolved) return { kind: 'error', text: '用法：/aoci <路径>（绝对路径，或相对 defaultRoot 的相对路径），或 /aoci 自动定位当前工作区' }
+        if (!resolved) return { kind: 'error', text: '用法：/aoci [路径]（绝对路径，或相对 defaultRoot 的相对路径），或 /aoci 自动定位当前工作区' }
         if (!(await isGitRepo(resolved))) return { kind: 'error', text: '不是 Git 仓库（需要 .git）：' + resolved }
 
         const slug = slugFromRoot(resolved)
@@ -52,7 +60,9 @@ export function installAociCommand(ctx: Context, deps: AociCommandDeps) {
           const initArgs = [binary, '--repo', resolved, 'init', '--locale', flags.locale ?? 'en-US']
           if (flags.scope) initArgs.push('--scope', flags.scope)
           if (flags.agent) initArgs.push('--agent', flags.agent)
+          const started = Date.now()
           const bin = await runAoci(ctx, { argv: initArgs, timeoutMs: 120000 })
+          void appendAudit(deps.stateDir ?? '', { ts: new Date().toISOString(), action: 'init', project: slug, ok: bin.exitCode === 0, exitCode: bin.exitCode, durationMs: Date.now() - started })
           if (bin.exitCode !== 0 && bin.exitCode !== null) {
             return { kind: 'error', text: 'init 失败(exit ' + bin.exitCode + '): ' + (bin.stderr || bin.stdout).slice(0, 400) }
           }
@@ -60,34 +70,45 @@ export function installAociCommand(ctx: Context, deps: AociCommandDeps) {
         // 基线已存在时跳过 scan（官方语义：scan 只建首次基线；之后维护走 maintain/update_entry）
         const hasBaseline = await fsP.access(join(resolved, '.aoci', 'baseline.json')).then(() => true).catch(() => false)
         if (!hasBaseline && !flags.skipScan) {
+          const started = Date.now()
           const sc = await runAoci(ctx, { argv: [binary, '--repo', resolved, 'scan'], timeoutMs: 300000 })
+          void appendAudit(deps.stateDir ?? '', { ts: new Date().toISOString(), action: 'scan', project: slug, ok: sc.exitCode === 0, exitCode: sc.exitCode, durationMs: Date.now() - started })
           if (sc.exitCode !== 0 && sc.exitCode !== null) {
             return { kind: 'error', text: 'scan 失败(exit ' + sc.exitCode + '): ' + (sc.stderr || sc.stdout).slice(0, 400) }
           }
         }
 
         const br = await deps.bridge.bind(resolved, binary)
+        void appendAudit(deps.stateDir ?? '', { ts: new Date().toISOString(), action: 'bind', project: slug, ok: br.ok, detail: br.message.slice(0, 200) })
         if (!br.ok) return { kind: 'error', text: br.message }
-        await deps.store.appendRun({ ts: new Date().toISOString(), kind: 'scan', project: slug, state: 'completed', message: br.message })
+        const head = gitHead(resolved)
+        await deps.store.appendRun({ ts: new Date().toISOString(), kind: 'bind', project: slug, state: 'completed', message: br.message })
         await deps.store.upsertProject({
-          slug, root: resolved, binaryPath: binary,
-          mcp: { serverName: br.namespace, connected: true, tools: 9 },
+          slug, root: resolved, binaryPath: binary, aociVersion: ver?.version,
+          mcp: { serverName: br.namespace, connected: true, tools: br.tools.length },
           index: { layout: 'volumes-v1', baseline: { established: true }, aligned: false, entries: 0 },
           database: { enabled: !!flags.db, sources: [] },
           schedule: { cron: '0 3 * * *', verifyOnly: true },
+          lastHead: head,
+          binary: { sha256: ver?.sha256, version: ver?.version, verifiedAt: new Date().toISOString() },
           createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
         })
 
         let dbNote = ''
         if (flags.db) {
           const pre = await runAoci(ctx, { argv: [binary, '--repo', resolved, 'database', 'source', 'access', '--source', flags.db, '--json'], timeoutMs: 60000 })
+          void appendAudit(deps.stateDir ?? '', { ts: new Date().toISOString(), action: 'db_preflight', project: slug, ok: pre.exitCode === 0, exitCode: pre.exitCode })
           dbNote = pre.exitCode === 0 ? '\n数据库预检(' + flags.db + ')通过，可让 AI 执行 database cognition bootstrap。' : '\n数据库预检(' + flags.db + ')未通过(exit ' + pre.exitCode + '): ' + (pre.stderr || pre.stdout).slice(0, 200)
         }
 
-        // 让当前 AI 立即开始建索引（plan-mode 同款提交模式；尽力而为）
+        const overviewTool = br.tools.includes('aoci_overview') ? 'mcp__' + br.namespace + '__aoci_overview' : 'mcp__' + br.namespace + '__aoci_overview'
+        const maintainHint = br.tools.includes('aoci_call')
+          ? '其余维护工具经 mcp__' + br.namespace + '__aoci_call 调用（tool=aoci_rules/aoci_maintain/aoci_update_entry/…）'
+          : '维护工具：mcp__' + br.namespace + '__aoci_maintain / aoci_update_entry / aoci_rules'
+        const strict = (deps.governance ?? 'standard') === 'strict'
         try {
           agent.steer(createUserMessage({
-            content: [{ type: 'text', text: 'AOCI 已就绪。请为仓库 ' + resolved + ' 建立 AOCI 认知索引：依次调用 mcp__' + br.namespace + '__aoci_rules 与完整 aoci_overview，按 Guide 分批 aoci_maintain + aoci_update_entry，最后 verify/check 证明 aligned。' + dbNote }],
+            content: [{ type: 'text', text: 'AOCI 已就绪（' + br.tools.length + ' 个工具，surface=' + (br.tools.includes('aoci_call') ? 'compact' : 'full') + '）。请为仓库 ' + resolved + ' 建立 AOCI 认知索引：先 ' + overviewTool + ' 读取完整系统认知；' + maintainHint + '；按 Guide 分批 maintain + 整批 update_entry，最后 ' + (strict ? '必须' : '建议') + ' verify/check 证明 aligned。' + dbNote }],
             source: { kind: 'user' },
           }))
         } catch { /* 提交失败则退化为提示文案 */ }

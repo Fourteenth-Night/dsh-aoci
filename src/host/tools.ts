@@ -1,5 +1,6 @@
-// 模型侧确定性工具（设计文档 4.10）：状态/扫描/验证/检查/面板 —— 零模型语义
-// 语义九工具仍走 MCP 通道（mcp__aoci-<slug>__*）；此处只暴露确定性运维操作。
+// 模型侧确定性工具（设计文档 4.10）：状态/扫描/验证/检查/刷新/审计 —— 零模型语义
+// toolSurface=compact 时合并查询类工具并省略低频工具（省 token）；full 暴露全量。
+// 语义九工具仍走 MCP 通道（mcp__aoci-<slug>__* 或聚合 aoci_call）。
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { promises as fsP } from 'node:fs'
 import { join } from 'node:path'
@@ -8,15 +9,27 @@ import type { EvidenceStore } from './evidence'
 import { subprocessAvailable, runAoci } from './cli'
 import { installHint } from './aoci-bin'
 import { isGitRepo, gitHead, gitDirty } from './workspace'
-import { slugFromRoot, resolveProjectPath, detectAociBinary } from './util'
+import { slugFromRoot, resolveProjectPath, detectAociBinary, estimateToolSurfaceChars } from './util'
+import { buildRefreshPlan } from './refresh'
+import { appendAudit, readAudit, formatAuditReport } from './audit'
 
 export interface ToolDeps {
   store: EvidenceStore
   binaryPath(): Promise<string | undefined>
   projects(): Promise<Array<{ root: string; slug: string }>>
   openPanel(slug: string): void
-  bridge: { bind(root: string, binaryPath: string): Promise<{ ok: boolean; slug: string; namespace: string; tools: string[]; message: string }>; unbind(slug: string): Promise<boolean> }
+  bridge: {
+    bind(root: string, binaryPath: string): Promise<{ ok: boolean; slug: string; namespace: string; tools: string[]; message: string }>
+    unbind(slug: string): Promise<boolean>
+    boundTools(slug: string): string[]
+  }
   defaultRoot?: string
+  stateDir: string
+  surface: 'compact' | 'full'
+  governance: 'strict' | 'standard' | 'relaxed'
+  autoRefresh: 'off' | 'status' | 'nightly'
+  readOnly: boolean
+  verifyBinary(): Promise<{ ok: boolean; version?: string; sha256?: string; reason?: string }>
 }
 
 export function installTools(ctx: Context, deps: ToolDeps) {
@@ -27,225 +40,346 @@ export function installTools(ctx: Context, deps: ToolDeps) {
       // 工具注册失败不阻塞其余插件启动
     }
   }
+  const compact = deps.surface === 'compact'
+  const toolText = (v: unknown) => [{ type: 'text' as const, text: String(v) }]
+  const audit = (ev: Parameters<typeof appendAudit>[1]) => { void appendAudit(deps.stateDir, ev) }
+  const resolveProject = async (slugOrRoot: string) => {
+    const projects = await deps.store.loadProjects()
+    return projects.find((x) => x.slug === slugOrRoot || x.root === slugOrRoot)
+  }
+  const runJson = async (binary: string, root: string, sub: string[], timeoutMs = 60000) => {
+    const out = await runAoci(ctx, { argv: [binary, '--repo', root, ...sub, '--json'], timeoutMs })
+    return { ok: out.exitCode === 0, text: out.exitCode === 0 ? out.stdout : 'exit ' + out.exitCode + ': ' + (out.stderr || out.stdout).slice(0, 400), exitCode: out.exitCode }
+  }
 
+  // ---------- 状态（含二进制校验/漂移/工具面估算） ----------
   register(defineTool({
     name: 'aoci_status',
-    description: '查看 dsh-aoci 管理的项目认知状态（aligned、条目数、基线、MCP 连接）。',
+    description: '查看 AOCI 项目状态：aligned/条目/基线/MCP、git 漂移、二进制校验、工具面。',
     parameters: {},
-    output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
+    output: { schema: { type: 'string' }, render: (_a, v) => toolText(v) },
     async execute() {
       const projects = await deps.store.loadProjects()
       const binary = (await deps.binaryPath()) ?? detectAociBinary()
-      return projects.map((p) => [
-        'slug=' + p.slug, 'root=' + p.root, 'aligned=' + p.index.aligned,
-        'entries=' + p.index.entries, 'baseline=' + p.index.baseline.established,
-        'mcp=' + p.mcp.connected, 'db=' + p.database.enabled,
-        'head=' + (gitHead(p.root) ?? 'n/a'), 'workingDirty=' + gitDirty(p.root),
-      ].join(' | ')).join('\n') || ('(暂无项目; 二进制=' + (binary ?? '未找到') + ')')
+      const ver = await deps.verifyBinary().catch(() => undefined)
+      const header = 'binary=' + (binary ?? '未找到') + ' | version=' + (ver?.version ?? '?') + ' | sha256=' + (ver?.sha256 ? ver.sha256.slice(0, 16) + '…' : '?') + ' | verified=' + (ver?.ok ? 'ok' : 'NO(' + (ver?.reason ?? 'unknown') + ')') + ' | surface=' + deps.surface + ' | governance=' + deps.governance + ' | readOnly=' + deps.readOnly
+      const lines = projects.map((p) => {
+        const head = gitHead(p.root)
+        const dirty = gitDirty(p.root)
+        const bound = deps.bridge.boundTools(p.slug)
+        return [
+          'slug=' + p.slug, 'root=' + p.root, 'aligned=' + p.index.aligned,
+          'entries=' + p.index.entries, 'baseline=' + p.index.baseline.established,
+          'mcp=' + p.mcp.connected, 'db=' + p.database.enabled,
+          'head=' + (head ? head.slice(0, 12) : 'n/a'), 'lastHead=' + (p.lastHead ? p.lastHead.slice(0, 12) : 'n/a'),
+          'workingDirty=' + dirty, 'boundTools=' + (bound.length ? bound.join(',') : '-'),
+        ].join(' | ')
+      }).join('\n') || '(暂无项目)'
+      return [header, lines].join('\n')
     },
   }))
 
+  // ---------- 验证 / 检查（成功时记录 lastHead 与审计事件） ----------
   register(defineTool({
     name: 'aoci_verify',
-    description: '对指定项目运行 aoci verify --json（只读治理门，可能追加本地 Ledger）。',
-    parameters: { project: { type: 'string', required: true, description: '项目 slug（见 aoci_status）' } },
-    output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
+    description: '运行 aoci verify --json（只读治理门）；成功后记录维护基线 HEAD。',
+    parameters: { project: { type: 'string', required: true, description: '项目 slug' } },
+    output: { schema: { type: 'string' }, render: (_a, v) => toolText(v) },
     async execute(args) {
-      if (!subprocessAvailable()) return 'dsh-aoci: ctx.subprocess 未挂载（需要 @deepseek-ai/dsh-subprocess-local）'
-      const binary = await deps.binaryPath()
+      if (!subprocessAvailable(ctx)) return 'dsh-aoci: 子进程服务未挂载'
+      const binary = (await deps.binaryPath()) ?? detectAociBinary()
       if (!binary) return installHint()
-      const projects = await deps.store.loadProjects()
-      const p = projects.find((x) => x.slug === args.project)
+      const p = await resolveProject(args.project)
       if (!p) return '未知项目: ' + args.project
+      const started = Date.now()
       const out = await runAoci(ctx, { argv: [binary, '--repo', p.root, 'verify', '--json'] })
-      if (out.exitCode !== 0) return 'verify 失败(exit ' + out.exitCode + '): ' + (out.stderr || out.stdout)
+      const ok = out.exitCode === 0
+      audit({ ts: new Date().toISOString(), action: 'verify', project: p.slug, ok, exitCode: out.exitCode, durationMs: Date.now() - started, head: gitHead(p.root) })
+      if (!ok) return 'verify 失败(exit ' + out.exitCode + '): ' + (out.stderr || out.stdout).slice(0, 600)
+      const head = gitHead(p.root)
+      await deps.store.upsertProject({
+        ...p, lastHead: head, lastMaintainAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        index: { ...p.index, aligned: true },
+      })
       await deps.store.appendRun({ ts: new Date().toISOString(), kind: 'verify', project: p.slug, state: 'completed', exitCode: 0 })
       return out.stdout
     },
   }))
 
   register(defineTool({
-    name: 'aoci_scan',
-    description: '对指定项目运行 aoci scan（建立/更新 Baseline）。',
+    name: 'aoci_check',
+    description: '运行 aoci check --json（聚合治理门）。',
     parameters: { project: { type: 'string', required: true, description: '项目 slug' } },
-    output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
+    output: { schema: { type: 'string' }, render: (_a, v) => toolText(v) },
     async execute(args) {
-      if (!subprocessAvailable()) return 'dsh-aoci: ctx.subprocess 未挂载'
-      const binary = await deps.binaryPath()
-      if (!binary) return installHint()
-      const projects = await deps.store.loadProjects()
-      const p = projects.find((x) => x.slug === args.project)
-      if (!p) return '未知项目: ' + args.project
-      if (!(await isGitRepo(p.root))) return '不是 Git 仓库，scan 需要 Git 清单: ' + p.root
-      const out = await runAoci(ctx, { argv: [binary, '--repo', p.root, 'scan'] })
-      if (out.exitCode !== 0) return 'scan 失败(exit ' + out.exitCode + '): ' + (out.stderr || out.stdout)
-      await deps.store.appendRun({ ts: new Date().toISOString(), kind: 'scan', project: p.slug, state: 'completed', exitCode: 0 })
-      return out.stdout
-    },
-  }))
-
-  register(defineTool({
-    name: 'aoci_panel',
-    description: '打开指定项目的 AOCI 只读面板（loopback）。',
-    parameters: { project: { type: 'string', required: true, description: '项目 slug' } },
-    output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
-    async execute(args) {
-      try {
-        deps.openPanel(args.project)
-        return '已请求打开面板: ' + args.project
-      } catch {
-        return '打开面板失败（面板可能未启动，可在设置页启用）'
-      }
-    },
-  }))
-
-  // aoci_use：AI 自主选定仓库路径（绝对/相对 defaultRoot）→ init + scan + 动态绑定 MCP 桥
-  register(defineTool({
-    name: 'aoci_use',
-    description: '为 AI 自主指定的 Git 仓库建立/复用 AOCI 认知：校验路径（绝对，或相对 defaultRoot）→ init + scan → 拉起 aoci mcp 并注册 mcp__aoci-<slug>__* 九工具。之后调用 aoci_rules 与 aoci_overview。',
-    parameters: {
-      path: { type: 'string', required: true, description: '仓库路径：绝对路径，或相对 defaultRoot 的相对路径' },
-      root: { type: 'string', description: '可选：绝对基准目录（覆盖 defaultRoot 用于相对路径解析）' },
-      locale: { type: 'string', description: 'init 语言环境，默认 en-US（可 zh-CN）' },
-      scope: { type: 'string', description: 'Managed Scope：production / full' },
-      agent: { type: 'string', description: '额外宿主接入（codex/claude/cursor/opencode），传给 aoci init --agent' },
-      db: { type: 'string', description: '数据源 sourceId（如 primary）：绑定后执行 database source access 预检' },
-      skipScan: { type: 'boolean', description: '跳过 scan（已有基线时自动跳过，无需设置）' },
-    },
-    output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
-    async execute(args) {
+      if (!subprocessAvailable(ctx)) return 'dsh-aoci: 子进程服务未挂载'
       const binary = (await deps.binaryPath()) ?? detectAociBinary()
       if (!binary) return installHint()
-      const resolved = resolveProjectPath(args.path, args.root || deps.defaultRoot)
-      if (!resolved) return '无法解析路径。请给绝对路径，或在设置里配置 defaultRoot（相对路径解析基准）。'
-      if (!(await isGitRepo(resolved))) return '不是 Git 仓库（需要 .git）：' + resolved
-      const slug = slugFromRoot(resolved)
-      // init 只治理未初始化仓库；已初始化（存在 aoci.txt）时跳过 init，避免 Volumes v1 拒绝写路径
-      const initialized = await fsP.access(join(resolved, 'aoci.txt')).then(() => true).catch(() => false)
-      if (!initialized) {
-        const initArgs = [binary, '--repo', resolved, 'init', '--locale', args.locale ?? 'en-US']
-        if (args.scope) initArgs.push('--scope', args.scope)
-        if (args.agent) initArgs.push('--agent', args.agent)
-        const bin = await runAoci(ctx, { argv: initArgs, timeoutMs: 120000 })
-        if (bin.exitCode !== 0 && bin.exitCode !== null) {
-          return 'init 失败(exit ' + bin.exitCode + '): ' + (bin.stderr || bin.stdout).slice(0, 400)
-        }
-      }
-      // 基线已存在时跳过 scan（官方语义：scan 只建首次基线；之后维护走 maintain/update_entry）
-      const hasBaseline = await fsP.access(join(resolved, '.aoci', 'baseline.json')).then(() => true).catch(() => false)
-      if (!hasBaseline && !args.skipScan) {
-        const sc = await runAoci(ctx, { argv: [binary, '--repo', resolved, 'scan'], timeoutMs: 300000 })
-        if (sc.exitCode !== 0 && sc.exitCode !== null && !/baseline|already/i.test(sc.stderr + sc.stdout)) {
-          return 'scan 失败(exit ' + sc.exitCode + '): ' + (sc.stderr || sc.stdout).slice(0, 400)
-        }
-      }
-      const br = await deps.bridge.bind(resolved, binary)
-      if (!br.ok) return br.message
-      await deps.store.appendRun({ ts: new Date().toISOString(), kind: 'scan', project: slug, state: 'completed', message: br.message })
-      await deps.store.upsertProject({
-        slug, root: resolved, binaryPath: binary,
-        mcp: { serverName: br.namespace, connected: true, tools: 9 },
-        index: { layout: 'volumes-v1', baseline: { established: true }, aligned: false, entries: 0 },
-        database: { enabled: !!args.db, sources: [] },
-        schedule: { cron: '0 3 * * *', verifyOnly: true },
-        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-      })
-      if (args.db) {
-        const pre = await runAoci(ctx, { argv: [binary, '--repo', resolved, 'database', 'source', 'access', '--source', args.db, '--json'], timeoutMs: 60000 })
-        return br.message + '\n数据库预检(' + args.db + '): ' + (pre.exitCode === 0 ? pre.stdout : '未通过(exit ' + pre.exitCode + '): ' + (pre.stderr || pre.stdout).slice(0, 300))
-      }
-      return br.message
-    },
-  }))
-
-  // aoci_unbind：解绑（终止 aoci mcp 进程、注销工具）
-  register(defineTool({
-    name: 'aoci_unbind',
-    description: '解绑某项目：终止其 aoci mcp 服务器并注销对应工具（mcp__aoci-<slug>__*）。',
-    parameters: { slug: { type: 'string', required: true, description: '项目 slug（见 aoci_use/aoci_status）' } },
-    output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
-    async execute(args) {
-      const ok = await deps.bridge.unbind(args.slug)
-      return ok ? '已解绑 ' + args.slug : '未找到已绑定的项目 ' + args.slug
-    },
-  }))
-
-  // aoci_check：与 verify 相同的确定性门，供 CI/收尾使用
-  register(defineTool({
-    name: 'aoci_check',
-    description: '对指定项目运行 aoci check --json（聚合治理门）。',
-    parameters: { project: { type: 'string', required: true, description: '项目 slug' } },
-    output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
-    async execute(args) {
-      if (!subprocessAvailable()) return 'dsh-aoci: ctx.subprocess 未挂载'
-      const binary = await deps.binaryPath()
-      if (!binary) return installHint()
-      const projects = await deps.store.loadProjects()
-      const p = projects.find((x) => x.slug === args.project)
+      const p = await resolveProject(args.project)
       if (!p) return '未知项目: ' + args.project
+      const started = Date.now()
       const out = await runAoci(ctx, { argv: [binary, '--repo', p.root, 'check', '--json'] })
-      if (out.exitCode !== 0) return 'check 失败(exit ' + out.exitCode + '): ' + (out.stderr || out.stdout)
+      audit({ ts: new Date().toISOString(), action: 'check', project: p.slug, ok: out.exitCode === 0, exitCode: out.exitCode, durationMs: Date.now() - started })
+      if (out.exitCode !== 0) return 'check 失败(exit ' + out.exitCode + '): ' + (out.stderr || out.stdout).slice(0, 600)
       await deps.store.appendRun({ ts: new Date().toISOString(), kind: 'check', project: p.slug, state: 'completed', exitCode: 0 })
       return out.stdout
     },
   }))
 
-  // AOCI System Cognition 查询（cognition system * --json）
-  const sysQuery = (name: string, desc: string, sub: string) => register(defineTool({
-    name,
-    description: desc,
-    parameters: { project: { type: 'string', required: true, description: '项目 slug' } },
-    output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
+  // ---------- 自主绑定（含只读模式/二进制校验/审计/HEAD 记录） ----------
+  register(defineTool({
+    name: 'aoci_use',
+    description: '为指定 Git 仓库建立/复用 AOCI 认知：校验路径与二进制 → init/scan（按需）→ 绑定 MCP 桥。支持 locale/scope/agent/db/skipScan。',
+    parameters: {
+      path: { type: 'string', required: true, description: '仓库路径（绝对或相对 defaultRoot）' },
+      root: { type: 'string', description: '可选：相对路径解析基准' },
+      locale: { type: 'string', description: 'init 语言环境（默认 en-US）' },
+      scope: { type: 'string', description: 'Managed Scope：production / full' },
+      agent: { type: 'string', description: 'aoci init --agent 额外宿主接入' },
+      db: { type: 'string', description: '数据源 sourceId：绑定后执行只读预检' },
+      skipScan: { type: 'boolean', description: '跳过 scan（已有基线会自动跳过）' },
+    },
+    output: { schema: { type: 'string' }, render: (_a, v) => toolText(v) },
     async execute(args) {
+      if (deps.readOnly) return '只读模式：已禁止 init/scan/维护写操作。请在设置中关闭 readOnly 后重试。'
       const binary = (await deps.binaryPath()) ?? detectAociBinary()
       if (!binary) return installHint()
-      const projects = await deps.store.loadProjects()
-      const p = projects.find((x) => x.slug === args.project)
-      if (!p) return '未知项目: ' + args.project
-      const out = await runAoci(ctx, { argv: [binary, '--repo', p.root, 'cognition', 'system', sub, '--json'], timeoutMs: 60000 })
-      return out.exitCode === 0 ? out.stdout : '查询失败(exit ' + out.exitCode + '): ' + (out.stderr || out.stdout).slice(0, 400)
+      const ver = await deps.verifyBinary()
+      if (!ver.ok) return '二进制校验失败：' + (ver.reason ?? '未知原因') + '\n' + installHint()
+      const resolved = resolveProjectPath(args.path, args.root || deps.defaultRoot)
+      if (!resolved) return '无法解析路径。请给绝对路径，或在设置里配置 defaultRoot（相对路径解析基准）。'
+      if (!(await isGitRepo(resolved))) return '不是 Git 仓库（需要 .git）：' + resolved
+      const slug = slugFromRoot(resolved)
+      const initialized = await fsP.access(join(resolved, 'aoci.txt')).then(() => true).catch(() => false)
+      if (!initialized) {
+        const initArgs = [binary, '--repo', resolved, 'init', '--locale', args.locale ?? 'en-US']
+        if (args.scope) initArgs.push('--scope', args.scope)
+        if (args.agent) initArgs.push('--agent', args.agent)
+        const started = Date.now()
+        const bin = await runAoci(ctx, { argv: initArgs, timeoutMs: 120000 })
+        audit({ ts: new Date().toISOString(), action: 'init', project: slug, ok: bin.exitCode === 0, exitCode: bin.exitCode, durationMs: Date.now() - started })
+        if (bin.exitCode !== 0 && bin.exitCode !== null) return 'init 失败(exit ' + bin.exitCode + '): ' + (bin.stderr || bin.stdout).slice(0, 400)
+      }
+      const hasBaseline = await fsP.access(join(resolved, '.aoci', 'baseline.json')).then(() => true).catch(() => false)
+      if (!hasBaseline && !args.skipScan) {
+        const started = Date.now()
+        const sc = await runAoci(ctx, { argv: [binary, '--repo', resolved, 'scan'], timeoutMs: 300000 })
+        audit({ ts: new Date().toISOString(), action: 'scan', project: slug, ok: sc.exitCode === 0, exitCode: sc.exitCode, durationMs: Date.now() - started })
+        if (sc.exitCode !== 0 && sc.exitCode !== null && !/baseline|already/i.test(sc.stderr + sc.stdout)) {
+          return 'scan 失败(exit ' + sc.exitCode + '): ' + (sc.stderr || sc.stdout).slice(0, 400)
+        }
+      }
+      const br = await deps.bridge.bind(resolved, binary)
+      audit({ ts: new Date().toISOString(), action: 'bind', project: slug, ok: br.ok, detail: br.message.slice(0, 200) })
+      if (!br.ok) return br.message
+      const head = gitHead(resolved)
+      await deps.store.appendRun({ ts: new Date().toISOString(), kind: 'bind', project: slug, state: 'completed', message: br.message })
+      await deps.store.upsertProject({
+        slug, root: resolved, binaryPath: binary, aociVersion: ver.version,
+        mcp: { serverName: br.namespace, connected: true, tools: br.tools.length },
+        index: { layout: 'volumes-v1', baseline: { established: true }, aligned: false, entries: 0 },
+        database: { enabled: !!args.db, sources: [] },
+        schedule: { cron: '0 3 * * *', verifyOnly: true },
+        lastHead: head,
+        binary: { sha256: ver.sha256, version: ver.version, verifiedAt: new Date().toISOString() },
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      })
+      let dbNote = ''
+      if (args.db) {
+        const pre = await runAoci(ctx, { argv: [binary, '--repo', resolved, 'database', 'source', 'access', '--source', args.db, '--json'], timeoutMs: 60000 })
+        audit({ ts: new Date().toISOString(), action: 'db_preflight', project: slug, ok: pre.exitCode === 0, exitCode: pre.exitCode })
+        dbNote = pre.exitCode === 0 ? '\n数据库预检(' + args.db + ')通过。' : '\n数据库预检(' + args.db + ')未通过(exit ' + pre.exitCode + '): ' + (pre.stderr || pre.stdout).slice(0, 200)
+      }
+      return br.message + dbNote
     },
   }))
-  sysQuery('aoci_relations', '项目依赖关系投影：卷包含关系 + 已解析的模型创作 R 关系（cognition system relations）。', 'relations')
-  // impact 需要 object 参数，单独定义
+
   register(defineTool({
-    name: 'aoci_impact',
-    description: '沿正式 R 关系找出数据库对象变更可能触达的代码对象（cognition system impact）。',
+    name: 'aoci_unbind',
+    description: '解绑项目：终止 aoci mcp 并注销对应工具。',
+    parameters: { slug: { type: 'string', required: true, description: '项目 slug' } },
+    output: { schema: { type: 'string' }, render: (_a, v) => toolText(v) },
+    async execute(args) {
+      const ok = await deps.bridge.unbind(args.slug)
+      audit({ ts: new Date().toISOString(), action: 'unbind', project: args.slug, ok })
+      return ok ? '已解绑 ' + args.slug : '未找到已绑定的项目 ' + args.slug
+    },
+  }))
+
+  // ---------- 增量刷新（方向 1） ----------
+  register(defineTool({
+    name: 'aoci_refresh',
+    description: '计算自上次维护基线以来的 git 变更集，并给出只维护受影响条目的分批指令（替代全量重建）。',
     parameters: {
       project: { type: 'string', required: true, description: '项目 slug' },
-      object: { type: 'string', required: true, description: '数据库对象名（如表名/对象标识）' },
+      sinceHead: { type: 'string', description: '可选：自定义基线 commit（默认使用项目记录的 lastHead）' },
+      maxFiles: { type: 'number', description: '最多列出的变更文件数（默认 60）' },
     },
-    output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
+    output: { schema: { type: 'string' }, render: (_a, v) => toolText(v) },
     async execute(args) {
-      const binary = (await deps.binaryPath()) ?? detectAociBinary()
-      if (!binary) return installHint()
-      const projects = await deps.store.loadProjects()
-      const p = projects.find((x) => x.slug === args.project)
+      const p = await resolveProject(args.project)
       if (!p) return '未知项目: ' + args.project
-      const out = await runAoci(ctx, { argv: [binary, '--repo', p.root, 'cognition', 'system', 'impact', '--object', args.object, '--json'], timeoutMs: 60000 })
-      return out.exitCode === 0 ? out.stdout : '查询失败(exit ' + out.exitCode + '): ' + (out.stderr || out.stdout).slice(0, 400)
+      const plan = buildRefreshPlan(p.root, args.sinceHead ?? p.lastHead, { governance: deps.governance, maxFiles: args.maxFiles })
+      audit({ ts: new Date().toISOString(), action: 'refresh', project: p.slug, ok: true, head: plan.head, detail: plan.changed.length + '+' + plan.untracked.length + ' files' })
+      await deps.store.appendRun({ ts: new Date().toISOString(), kind: 'refresh', project: p.slug, state: 'completed', message: plan.changed.length + ' changed' })
+      return plan.instruction
     },
   }))
-  sysQuery('aoci_lineage', '索引对象来源与证据/回执绑定链（cognition system lineage）。', 'lineage')
 
-  // aoci_db：数据库数据源只读预检（凭据仅环境变量引用）
+  // ---------- 构建进度（方向 1） ----------
   register(defineTool({
-    name: 'aoci_db',
-    description: '对指定项目的数据库数据源执行只读预检（database source access --json）；凭据仅环境变量引用，绝不收集密钥。',
-    parameters: { project: { type: 'string', required: true, description: '项目 slug' }, source: { type: 'string', required: true, description: '数据源 sourceId（如 primary）' } },
-    output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
+    name: 'aoci_build_status',
+    description: '查看最近的索引构建/维护/验证运行记录与当前绑定状态。',
+    parameters: { project: { type: 'string', description: '可选：只看某项目 slug' } },
+    output: { schema: { type: 'string' }, render: (_a, v) => toolText(v) },
+    async execute(args) {
+      const runs = await deps.store.readRuns(40)
+      const filtered = args.project ? runs.filter((r) => r.project === args.project) : runs
+      const tail = filtered.slice(-15).map((r) => r.ts + ' · ' + r.kind + ' · ' + r.project + ' · ' + r.state + (r.exitCode !== undefined ? ' exit=' + r.exitCode : '') + (r.message ? ' · ' + r.message.slice(0, 80) : ''))
+      const projects = await deps.store.loadProjects()
+      const binds = projects.map((p) => p.slug + ': bound=' + deps.bridge.boundTools(p.slug).length + ' tools').join('\n') || '(无项目)'
+      return ['# 构建/维护记录（最近）', ...tail, '', '# 当前绑定', binds].join('\n')
+    },
+  }))
+
+  // ---------- 审计（方向 4） ----------
+  register(defineTool({
+    name: 'aoci_audit',
+    description: '生成治理审计报告：verify/check 结果、HEAD 与维护基线漂移、最近事件时间线。',
+    parameters: { project: { type: 'string', required: true, description: '项目 slug' } },
+    output: { schema: { type: 'string' }, render: (_a, v) => toolText(v) },
     async execute(args) {
       const binary = (await deps.binaryPath()) ?? detectAociBinary()
       if (!binary) return installHint()
-      const projects = await deps.store.loadProjects()
-      const p = projects.find((x) => x.slug === args.project)
+      const p = await resolveProject(args.project)
       if (!p) return '未知项目: ' + args.project
-      const pre = await runAoci(ctx, { argv: [binary, '--repo', p.root, 'database', 'source', 'access', '--source', args.source, '--json'], timeoutMs: 60000 })
-      if (pre.exitCode === 0) {
-        await deps.store.appendRun({ ts: new Date().toISOString(), kind: 'db_bootstrap', project: p.slug, state: 'completed', message: 'db preflight ok ' + args.source })
-        return '预检通过：' + pre.stdout + '\n下一步：让当前 AI 执行 database cognition bootstrap 建立表级认知（凭据由环境变量 AOCI_DB_<ID>_DSN 提供）。'
-      }
-      return '预检未通过(exit ' + pre.exitCode + '): ' + (pre.stderr || pre.stdout).slice(0, 300)
+      const head = gitHead(p.root)
+      const verify = await runJson(binary, p.root, ['verify'])
+      const check = await runJson(binary, p.root, ['check'])
+      const events = await readAudit(deps.stateDir)
+      audit({ ts: new Date().toISOString(), action: 'audit', project: p.slug, ok: verify.ok && check.ok, head })
+      return formatAuditReport(p.slug, {
+        events, head, lastHead: p.lastHead, aligned: p.index.aligned,
+        verifyText: verify.text, checkText: check.text, governance: deps.governance,
+      })
     },
   }))
+
+  // ---------- 紧凑查询（compact 模式）：合并 relations/impact/lineage/db ----------
+  if (compact) {
+    register(defineTool({
+      name: 'aoci_query',
+      description: 'AOCI 系统查询聚合：kind=relations|impact|lineage|db（impact 需 object；db 需 source）。',
+      parameters: {
+        project: { type: 'string', required: true, description: '项目 slug' },
+        kind: { type: 'string', required: true, description: 'relations / impact / lineage / db' },
+        object: { type: 'string', description: 'kind=impact 时的数据库对象名' },
+        source: { type: 'string', description: 'kind=db 时的数据源 sourceId' },
+      },
+      output: { schema: { type: 'string' }, render: (_a, v) => toolText(v) },
+      async execute(args) {
+        const binary = (await deps.binaryPath()) ?? detectAociBinary()
+        if (!binary) return installHint()
+        const p = await resolveProject(args.project)
+        if (!p) return '未知项目: ' + args.project
+        const kind = String(args.kind ?? '')
+        if (kind === 'impact') {
+          if (!args.object) return 'kind=impact 需要 object 参数'
+          return (await runJson(binary, p.root, ['cognition', 'system', 'impact', '--object', args.object])).text
+        }
+        if (kind === 'db') {
+          if (!args.source) return 'kind=db 需要 source 参数'
+          const pre = await runAoci(ctx, { argv: [binary, '--repo', p.root, 'database', 'source', 'access', '--source', args.source, '--json'], timeoutMs: 60000 })
+          audit({ ts: new Date().toISOString(), action: 'db_preflight', project: p.slug, ok: pre.exitCode === 0, exitCode: pre.exitCode })
+          return pre.exitCode === 0 ? pre.stdout : '预检未通过(exit ' + pre.exitCode + '): ' + (pre.stderr || pre.stdout).slice(0, 300)
+        }
+        if (!['relations', 'lineage'].includes(kind)) return '未知 kind: ' + kind + '（可选 relations/impact/lineage/db）'
+        return (await runJson(binary, p.root, ['cognition', 'system', kind])).text
+      },
+    }))
+  }
+
+  // ---------- 全量模式专用工具 ----------
+  if (!compact) {
+    register(defineTool({
+      name: 'aoci_scan',
+      description: '运行 aoci scan（建立/更新 Baseline）。',
+      parameters: { project: { type: 'string', required: true, description: '项目 slug' } },
+      output: { schema: { type: 'string' }, render: (_a, v) => toolText(v) },
+      async execute(args) {
+        if (deps.readOnly) return '只读模式：已禁止 scan'
+        const binary = (await deps.binaryPath()) ?? detectAociBinary()
+        if (!binary) return installHint()
+        const p = await resolveProject(args.project)
+        if (!p) return '未知项目: ' + args.project
+        if (!(await isGitRepo(p.root))) return '不是 Git 仓库，scan 需要 Git 清单: ' + p.root
+        const started = Date.now()
+        const out = await runAoci(ctx, { argv: [binary, '--repo', p.root, 'scan'] })
+        audit({ ts: new Date().toISOString(), action: 'scan', project: p.slug, ok: out.exitCode === 0, exitCode: out.exitCode, durationMs: Date.now() - started })
+        if (out.exitCode !== 0) return 'scan 失败(exit ' + out.exitCode + '): ' + (out.stderr || out.stdout).slice(0, 400)
+        await deps.store.appendRun({ ts: new Date().toISOString(), kind: 'scan', project: p.slug, state: 'completed', exitCode: 0 })
+        return out.stdout
+      },
+    }))
+    register(defineTool({
+      name: 'aoci_panel',
+      description: '打开指定项目的 AOCI 只读面板（需启用 httpRoutes）。',
+      parameters: { project: { type: 'string', required: true, description: '项目 slug' } },
+      output: { schema: { type: 'string' }, render: (_a, v) => toolText(v) },
+      async execute(args) {
+        try { deps.openPanel(args.project); return '已请求打开面板: ' + args.project } catch { return '打开面板失败（面板可能未启用）' }
+      },
+    }))
+    const sysQuery = (name: string, desc: string, sub: string) => register(defineTool({
+      name, description: desc,
+      parameters: { project: { type: 'string', required: true, description: '项目 slug' } },
+      output: { schema: { type: 'string' }, render: (_a, v) => toolText(v) },
+      async execute(args) {
+        const binary = (await deps.binaryPath()) ?? detectAociBinary()
+        if (!binary) return installHint()
+        const p = await resolveProject(args.project)
+        if (!p) return '未知项目: ' + args.project
+        const out = await runJson(binary, p.root, ['cognition', 'system', sub])
+        return out.text
+      },
+    }))
+    sysQuery('aoci_relations', '项目依赖关系投影（cognition system relations）。', 'relations')
+    sysQuery('aoci_lineage', '索引对象来源与证据绑定链（cognition system lineage）。', 'lineage')
+    register(defineTool({
+      name: 'aoci_impact',
+      description: '沿正式 R 关系找出数据库对象变更可能触达的代码对象（cognition system impact）。',
+      parameters: {
+        project: { type: 'string', required: true, description: '项目 slug' },
+        object: { type: 'string', required: true, description: '数据库对象名' },
+      },
+      output: { schema: { type: 'string' }, render: (_a, v) => toolText(v) },
+      async execute(args) {
+        const binary = (await deps.binaryPath()) ?? detectAociBinary()
+        if (!binary) return installHint()
+        const p = await resolveProject(args.project)
+        if (!p) return '未知项目: ' + args.project
+        const out = await runJson(binary, p.root, ['cognition', 'system', 'impact', '--object', args.object])
+        return out.text
+      },
+    }))
+    register(defineTool({
+      name: 'aoci_db',
+      description: '数据库数据源只读预检（database source access --json）。',
+      parameters: { project: { type: 'string', required: true, description: '项目 slug' }, source: { type: 'string', required: true, description: '数据源 sourceId' } },
+      output: { schema: { type: 'string' }, render: (_a, v) => toolText(v) },
+      async execute(args) {
+        const binary = (await deps.binaryPath()) ?? detectAociBinary()
+        if (!binary) return installHint()
+        const p = await resolveProject(args.project)
+        if (!p) return '未知项目: ' + args.project
+        const pre = await runAoci(ctx, { argv: [binary, '--repo', p.root, 'database', 'source', 'access', '--source', args.source, '--json'], timeoutMs: 60000 })
+        audit({ ts: new Date().toISOString(), action: 'db_preflight', project: p.slug, ok: pre.exitCode === 0, exitCode: pre.exitCode })
+        if (pre.exitCode === 0) {
+          await deps.store.appendRun({ ts: new Date().toISOString(), kind: 'db_bootstrap', project: p.slug, state: 'completed', message: 'db preflight ok ' + args.source })
+          return '预检通过：' + pre.stdout
+        }
+        return '预检未通过(exit ' + pre.exitCode + '): ' + (pre.stderr || pre.stdout).slice(0, 300)
+      },
+    }))
+  }
 }

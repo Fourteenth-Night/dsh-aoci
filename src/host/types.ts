@@ -42,7 +42,7 @@ export interface McpEntry {
   }
 }
 
-export type RunKind = 'index_build' | 'maintain' | 'verify' | 'check' | 'scan' | 'db_bootstrap'
+export type RunKind = 'index_build' | 'maintain' | 'verify' | 'check' | 'scan' | 'db_bootstrap' | 'refresh' | 'audit' | 'bind'
 export type RunState = 'running' | 'completed' | 'failed' | 'killed'
 
 export interface TaskRun {
@@ -78,6 +78,11 @@ export interface ProjectRecord {
     sources: Array<DbSource & { accessPreflight?: 'ok' | 'missing-ref' | 'error'; evidenceHash?: string }>
   }
   schedule: { cron: string; verifyOnly: boolean }
+  /** 增量刷新：最近一次记录的仓库 HEAD 与维护时间 */
+  lastHead?: string
+  lastMaintainAt?: string
+  /** 二进制校验缓存（路径变化或 mtime 变化时重新校验） */
+  binary?: { sha256?: string; version?: string; verifiedAt?: string }
   createdAt: string
   updatedAt: string
 }
