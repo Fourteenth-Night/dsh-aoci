@@ -1,6 +1,6 @@
 // dsh-aoci host 半边入口（node 进程）
 // 双面插件：包根 exports "."（本文件）；exports "./client" 为浏览器半边。
-// 安装：dsh plugin --profile <name> add ./dsh-aoci-0.2.0.tgz
+// 安装：dsh plugin --profile <name> add ./dsh-aoci-0.2.1.tgz
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { AociConfigSchema, type AociConfig } from './host/config'

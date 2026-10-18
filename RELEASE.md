@@ -4,7 +4,8 @@
 
 | 版本 | 主要内容 |
 |---|---|
-| 0.2.0 | **适配 DSH 0.2.0-rc.2（cordis 4.0.4）**。① 工具面优化：`toolSurface=compact`（默认）仅暴露 `aoci_overview` + 聚合入口 `aoci_call`，确定性工具合并为 `aoci_query`，模型可见工具从 20 个降至 11 个；② 上下文预算：`ctx.tokenMeter` 压力感知 + 压缩折叠策略（fold/fold+compact）；③ 增量刷新：`aoci_refresh`（记录 lastHead + git diff 变更集 + 分批维护指令）、`aoci_build_status`；④ 治理审计：结构化 `aoci-events.jsonl` + `aoci_audit` 报告 + `governance` 分级；⑤ 最小权限：aoci 经 `ctx.subprocess` 受管执行（env 白名单/超时/取消/有界输出）、`readOnly` 模式、`httpRoutes` 默认关闭；⑥ 二进制安全：SHA-256 + `minAociVersion` 校验与缓存；⑦ 质量：依赖矩阵升级至 0.2.0-rc.2、28 单测、GitHub Actions CI。另含 0.2.0 早期功能：`/aoci` 无参自动定位、二进制自动探测、动态绑定持久化、桥自动重连、git 漂移状态、`/aoci` 选项化 |
+| 0.2.1 | **适配 DSH 0.2.0-rc.2（cordis 4.0.4）**。① 工具面优化：`toolSurface=compact`（默认）仅暴露 `aoci_overview` + 聚合入口 `aoci_call`，确定性工具合并为 `aoci_query`，模型可见工具从 20 个降至 11 个；② 上下文预算：`ctx.tokenMeter` 压力感知 + 压缩折叠策略（fold/fold+compact）；③ 增量刷新：`aoci_refresh`（记录 lastHead + git diff 变更集 + 分批维护指令）、`aoci_build_status`；④ 治理审计：结构化 `aoci-events.jsonl` + `aoci_audit` 报告 + `governance` 分级；⑤ 最小权限：aoci 经 `ctx.subprocess` 受管执行（env 白名单/超时/取消/有界输出）、`readOnly` 模式、`httpRoutes` 默认关闭；⑥ 二进制安全：SHA-256 + `minAociVersion` 校验与缓存；⑦ 质量：依赖矩阵升级至 0.2.0-rc.2、28 单测、GitHub Actions CI。另含 0.2.0 早期功能：`/aoci` 无参自动定位、二进制自动探测、动态绑定持久化、桥自动重连、git 漂移状态、`/aoci` 选项化 |
+| 0.2.0 | `/aoci` 无参自动定位当前工作区仓库；二进制自动探测（binaryAutoDetect）；System Cognition 查询工具（aoci_relations / aoci_impact / aoci_lineage）；aoci_db 数据库只读预检；桥进程崩溃自动重连；git 漂移检测（aoci_status 报 head/workingDirty）；动态绑定持久化（upsertProject）；`/aoci`/aoci_use 选项化（--locale/--scope/--agent/--skip-scan/--db） |
 | 0.1.0 | 初始可运行版本：双面插件骨架、证据账本、确定性 CLI 封装、设置页、skill |
 | 0.1.1 | 修复 DSH 宿主沙箱服务访问：全部服务读取改为安全属性访问（消除 `cannot get property ... without inject` 启动失败） |
 | 0.1.2 | 修复 apply 返回值 effect 语义（`Invalid effect`）：apply 不返回值 |
