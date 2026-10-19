@@ -148,6 +148,8 @@ export function installAociCommand(ctx: Context, deps: AociCommandDeps) {
             '- F≤160 runes；R≤360 runes 且 ≤8 项（code:path 逗号分隔，无则 -）；A≤400 runes 且 ≤6 项；',
             '- S 只看不可推断、防错事实，配额按重要度：C9-8≤600 / C7-4≤200 / C3-1≤50 tokens；无则 S:-',
             '建议先调用 aoci_cognition 的 action="validate" 本地预校验条目，再提交 update_entry。',
+            'maintain 结果会自动附 E 档建议（行数→T/S/M/L）；质量优化可用 aoci_cognition action="optimize"（返回 review-required 批次）。',
+            '工具可见性：优先 aoci_cognition（PTC/native 均可用）或 mcp__' + br.namespace + '__*；若两者都不在工具列表，使用随包脚本 scripts/aoci-mcp-driver.mjs（单进程完成 overview+attestation，临时输出写 state/aoci/tmp）。',
           ].join('\n')
           agent.steer(createUserMessage({
             content: [{ type: 'text', text: 'AOCI 已就绪（' + br.tools.length + ' 个工具，surface=' + (br.tools.includes('aoci_call') ? 'compact' : 'full') + '）。请为仓库 ' + resolved + ' 建立 AOCI 认知索引，严格按顺序：1) ' + overviewTool + ' 读取完整认知（跟 next_cursor 到 completed=true）；2) 按契约提交 attestation；3) ' + maintainHint + '；4) 按批次交付 update_entry；5) ' + (strict ? '必须' : '建议') + ' verify/check；6) 用 index agent guide 证明 complete=true。\n\n' + constraints + dbNote }],

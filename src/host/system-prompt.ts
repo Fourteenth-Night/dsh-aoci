@@ -26,7 +26,8 @@ export function installSystemPrompt(ctx: Context, projects: ProjectConfig[], opt
       opts.governance === 'strict' ? '7) 治理级别 strict：维护后必须 aoci_verify 与 aoci_check 均通过，否则不得声称 aligned。' : '7) 治理级别 ' + (opts.governance ?? 'standard') + '：维护后建议 verify/check。',
       opts.readOnly ? '8) 只读模式已开启：禁止 init/scan/maintain 等写操作。' : '',
       '9) 建索引顺序：aoci_overview（完整）→ attestation → maintain → 分批 update_entry → verify/check → guide。Volumes v1 仓库只能用 MCP 的 aoci_maintain/aoci_update_entry（经 aoci_cognition），不要用 legacy index/scope/onboard 命令。',
-      '10) Entry 契约：filename[tag]: F≤160 | R≤360(≤8项)- | A≤400(≤6项)- | S 按重要度(C9-8≤600/C7-4≤200/C3-1≤50 tokens)；标签 A+B+C+[D]+E；先用 aoci_cognition action="validate" 预校验。',
+      '10) 若 aoci_cognition / mcp__aoci-* 不在工具列表：使用随包 scripts/aoci-mcp-driver.mjs（单进程完成 overview+attestation），输出写 state/aoci/tmp。',
+      '11) Entry 契约：filename[tag]: F≤160 | R≤360(≤8项)- | A≤400(≤6项)- | S 按重要度(C9-8≤600/C7-4≤200/C3-1≤50 tokens)；标签 A+B+C+[D]+E；先用 aoci_cognition action="validate" 预校验。',
     ].join('\n'),
   })
 }

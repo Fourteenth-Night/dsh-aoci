@@ -11,6 +11,10 @@ import { installHint } from './aoci-bin'
 import { isGitRepo, gitHead, gitDirty } from './workspace'
 import { slugFromRoot, resolveProjectPath, detectAociBinary, estimateToolSurfaceChars, normalizeAociAction, validateEntryText, humanizeAociError } from './util'
 import { acquireLock, releaseLock } from './lock'
+import { safeLogger } from './logger'
+
+/** 本进程已注册的工具名（供状态自检） */
+export const registeredToolNames: string[] = []
 import { locateRepo } from './repo-locate'
 import { buildRefreshPlan } from './refresh'
 import { appendAudit, readAudit, formatAuditReport } from './audit'
@@ -40,8 +44,10 @@ export function installTools(ctx: Context, deps: ToolDeps) {
   const register = (tool: ToolDefinition) => {
     try {
       ;(ctx.tools as unknown as { register(t: ToolDefinition): void }).register(tool)
-    } catch {
-      // 工具注册失败不阻塞其余插件启动
+      registeredToolNames.push(tool.name)
+    } catch (e) {
+      // 注册失败不阻塞其余启动，但必须留下日志（此前静默吞错导致"工具不可见"难以排查）
+      safeLogger(ctx).warn('dsh-aoci: 工具注册失败 ' + tool.name + ': ' + (e as Error).message)
     }
   }
   const compact = deps.surface === 'compact'
@@ -67,6 +73,7 @@ export function installTools(ctx: Context, deps: ToolDeps) {
       const binary = (await deps.binaryPath()) ?? detectAociBinary()
       const ver = await deps.verifyBinary().catch(() => undefined)
       const header = 'binary=' + (binary ?? '未找到') + ' | version=' + (ver?.version ?? '?') + ' | sha256=' + (ver?.sha256 ? ver.sha256.slice(0, 16) + '…' : '?') + ' | verified=' + (ver?.ok ? 'ok' : 'NO(' + (ver?.reason ?? 'unknown') + ')') + ' | surface=' + deps.surface + ' | governance=' + deps.governance + ' | readOnly=' + deps.readOnly
+      const toolsLine = 'registeredTools=' + registeredToolNames.length + ' [' + registeredToolNames.join(',') + ']'
       const lines = projects.map((p) => {
         const head = gitHead(p.root)
         const dirty = gitDirty(p.root)
@@ -79,7 +86,7 @@ export function installTools(ctx: Context, deps: ToolDeps) {
           'workingDirty=' + dirty, 'boundTools=' + (bound.length ? bound.join(',') : '-'),
         ].join(' | ')
       }).join('\n') || '(暂无项目)'
-      return [header, lines].join('\n')
+      return [header, toolsLine, lines].join('\n')
     },
   }))
 
@@ -232,8 +239,9 @@ export function installTools(ctx: Context, deps: ToolDeps) {
         })
         return bad ? '预校验发现 ' + bad + '/' + items.length + ' 条问题：\n' + lines.join('\n') : '预校验通过：' + items.length + ' 条 Entry 格式与长度均符合契约。'
       }
-      const tool = normalizeAociAction(rawAction)
-      if (!tool) return '未知 action: ' + rawAction + '（可选：rules/overview/get_entries/search/maintain/update_entry/remove_entry/header/report/validate）'
+      // optimize：映射到 maintain intent=cognition_optimization（返回 review-required 质量批次）
+      const tool = rawAction === 'optimize' ? 'aoci_maintain' : normalizeAociAction(rawAction)
+      if (!tool) return '未知 action: ' + rawAction + '（可选：rules/overview/get_entries/search/maintain/update_entry/remove_entry/header/report/validate/optimize）'
       const writeActions = ['aoci_maintain', 'aoci_update_entry', 'aoci_remove_entry']
       if (deps.readOnly && writeActions.includes(tool)) return '只读模式：已禁止维护类操作。'
       const binary = (await deps.binaryPath()) ?? detectAociBinary()
@@ -254,7 +262,9 @@ export function installTools(ctx: Context, deps: ToolDeps) {
       if (!ver.ok) return '二进制校验失败：' + (ver.reason ?? '未知原因') + '\n' + installHint()
       const br = await deps.bridge.ensure(root, binary)
       if (!br.ok) return br.message
-      const callArgs = ((args as { args?: Record<string, unknown> }).args ?? {})
+      const callArgs = rawAction === 'optimize'
+        ? { ...(((args as { args?: Record<string, unknown> }).args ?? {})), intent: 'cognition_optimization' }
+        : ((args as { args?: Record<string, unknown> }).args ?? {})
       if (writeActions.includes(tool)) {
         // 并发锁：同一仓库同一时刻只允许一个会话正式写
         const lock = await acquireLock(deps.stateDir, br.slug)

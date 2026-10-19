@@ -36,6 +36,8 @@ AOCI-CODE 采用 FSL-1.1-MIT（source-available）；本插件**不捆绑**其�
 | 构建状态 | `aoci_build_status` | 最近构建/维护/验证记录与绑定 |
 | 静态认知入口 | `aoci_cognition { action, project?, path?, args? }` | PTC/native 均可用（加载时注册 + 懒绑定）；支持 `action="validate"` 本地预校验条目（F≤160、R≤360/8 项、A≤400/6 项、S 按重要度档） |
 | 系统查询 | `aoci_query {kind}`(compact) 或 `aoci_relations`/`aoci_impact`/`aoci_lineage`/`aoci_db`(full) | 依赖投影/影响分析/来源链/数据库预检 |
+| 质量优化 | `aoci_cognition { action: "optimize" }` | 以 `intent=cognition_optimization` 运行 maintain，返回质量优化批次（E 档 / R-S token 目标） |
+| 兜底驱动 | `scripts/aoci-mcp-driver.mjs` | 随包脚本：单进程执行一个工具或步骤序列（overview+attestation 必须同进程），输出写 `state/aoci/tmp`，支持 `--clean` |
 | 自主选路 | `aoci_use`、`aoci_unbind` | 按需绑定/解绑仓库 |
 | 斜杠命令 | `/aoci [路径]` | 一键接入（校验 + 绑定 + 指示建索引） |
 

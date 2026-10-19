@@ -37,6 +37,8 @@ AOCI-CODE is licensed FSL-1.1-MIT (source-available); this plugin **does not bun
 | System Cognition | `aoci_query {kind: relations\|impact\|lineage\|db}` (compact) · `aoci_relations`, `aoci_impact <object>`, `aoci_lineage`, `aoci_db <source>` (full) | Dependency projection, impact analysis, lineage, database preflight |
 | Static cognition entry | `aoci_cognition { action, project?, path?, args? }` | Works in **both PTC and native tool modes** (registered at plugin load, lazy-binds the repo): rules/overview/maintain/update_entry/search/header/report, plus `action: "validate"` for local entry pre-validation (F≤160, R≤360/8, A≤400/6, S by importance band). |
 | Agent-driven binding | `aoci_use <path>`, `aoci_unbind <slug>` | Autonomous repository selection |
+| Quality optimization | `aoci_cognition { action: "optimize" }` | Runs `maintain` with `intent=cognition_optimization`; returns the review-required quality batch (E-scale / R-S token targets) |
+| Fallback driver | `scripts/aoci-mcp-driver.mjs` | Ships with the package; drives one MCP process for a tool or a step sequence (keep overview + attestation in one process). Writes to `state/aoci/tmp`; supports `--clean` |
 | Slash command | `/aoci [path]` | One-shot onboarding (verify + bind + instruct agent to build) |
 
 ## Architecture

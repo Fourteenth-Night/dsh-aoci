@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-10-18T16:49:29Z",
-  "updated_at": "2026-10-19T05:37:29Z",
+  "updated_at": "2026-10-19T06:39:30Z",
   "files": {
     ".gitattributes": {
       "role": "index",
@@ -35,27 +35,27 @@
     },
     "README.md": {
       "role": "index",
-      "sha256": "1a08fb85f9d8c804527c43ac49360aa469b51c6137aedef1626a8ced97356352",
-      "size": 12832,
-      "normalized_sha256": "1a08fb85f9d8c804527c43ac49360aa469b51c6137aedef1626a8ced97356352"
+      "sha256": "b2a4f2985807d0bf21aff2676e94e5651bb9c5041f2dcfbf28217a44d2a0e9e9",
+      "size": 13251,
+      "normalized_sha256": "b2a4f2985807d0bf21aff2676e94e5651bb9c5041f2dcfbf28217a44d2a0e9e9"
     },
     "README.zh-CN.md": {
       "role": "index",
-      "sha256": "7a21a4f9c03883719256c5748e8d3f5610f7de56489f3dea0bcf937367b01052",
-      "size": 8571,
-      "normalized_sha256": "7a21a4f9c03883719256c5748e8d3f5610f7de56489f3dea0bcf937367b01052"
+      "sha256": "d94eac1766324053eeb7cfacd823aab9c6106a3256cc098eac5d306a2e72241e",
+      "size": 8940,
+      "normalized_sha256": "d94eac1766324053eeb7cfacd823aab9c6106a3256cc098eac5d306a2e72241e"
     },
     "RELEASE.md": {
       "role": "index",
-      "sha256": "7f77441851f32005eb9a522ae71a8889d50e7e01b5bc812b3db31811934f3975",
-      "size": 6658,
-      "normalized_sha256": "7f77441851f32005eb9a522ae71a8889d50e7e01b5bc812b3db31811934f3975"
+      "sha256": "da7b0e23f83f6f5c42c1dd3475686f644c763462e79b09f7ee568e353d2ee0db",
+      "size": 7220,
+      "normalized_sha256": "da7b0e23f83f6f5c42c1dd3475686f644c763462e79b09f7ee568e353d2ee0db"
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "4e82f5b580f8a2348fdc9046b012d76c7c4e3d2b3503adda876628da72edc0de",
-      "size": 12413,
-      "normalized_sha256": "4e82f5b580f8a2348fdc9046b012d76c7c4e3d2b3503adda876628da72edc0de"
+      "sha256": "c743e20f0f90046adec7a56c0831f57a647bbf7dfcd22a3b28855c79c4101993",
+      "size": 12796,
+      "normalized_sha256": "c743e20f0f90046adec7a56c0831f57a647bbf7dfcd22a3b28855c79c4101993"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -89,21 +89,27 @@
     },
     "dsh.plugin.json": {
       "role": "index",
-      "sha256": "03963d47746af8ae46e6af71a7388eaed1a68467430fbe00d78cf1cd57fac02e",
+      "sha256": "d661914f029b3d7a5b03f47ff626d99caaca8c35953c12414bb8ab3c838ef156",
       "size": 422,
-      "normalized_sha256": "03963d47746af8ae46e6af71a7388eaed1a68467430fbe00d78cf1cd57fac02e"
+      "normalized_sha256": "d661914f029b3d7a5b03f47ff626d99caaca8c35953c12414bb8ab3c838ef156"
     },
     "package.json": {
       "role": "index",
-      "sha256": "4c7fe06faceb2e08c31d8b01c792d49d0caad1860af1b95dc126c74be591bdcb",
-      "size": 3490,
-      "normalized_sha256": "4c7fe06faceb2e08c31d8b01c792d49d0caad1860af1b95dc126c74be591bdcb"
+      "sha256": "dfeb71ba2049f6a5628fc5cc9325557d901698004cf186f78db5144e7e90bb20",
+      "size": 3525,
+      "normalized_sha256": "dfeb71ba2049f6a5628fc5cc9325557d901698004cf186f78db5144e7e90bb20"
     },
     "pnpm-lock.yaml": {
       "role": "index",
       "sha256": "33f449f587ce3346ac7f925b9354ccf079fb6642cbbfecf4f16c0515e2094ce7",
       "size": 132963,
       "normalized_sha256": "33f449f587ce3346ac7f925b9354ccf079fb6642cbbfecf4f16c0515e2094ce7"
+    },
+    "scripts/aoci-mcp-driver.mjs": {
+      "role": "index",
+      "sha256": "5e76e240cec193b9983cd814465f3343b545b7891c64ff40e838c348651703d7",
+      "size": 3116,
+      "normalized_sha256": "5e76e240cec193b9983cd814465f3343b545b7891c64ff40e838c348651703d7"
     },
     "scripts/build-client.mjs": {
       "role": "index",
@@ -161,9 +167,9 @@
     },
     "src/host/bridge.ts": {
       "role": "index",
-      "sha256": "fc2f360973e1dc33d7d47bfd76f492ea63e5c2fad4c2195375e071e26113358d",
+      "sha256": "852b989a47d4de88b9f63656c31ecc653375645623c5db888853b439517e2583",
       "size": 11296,
-      "normalized_sha256": "fc2f360973e1dc33d7d47bfd76f492ea63e5c2fad4c2195375e071e26113358d"
+      "normalized_sha256": "852b989a47d4de88b9f63656c31ecc653375645623c5db888853b439517e2583"
     },
     "src/host/cli.ts": {
       "role": "index",
@@ -173,9 +179,9 @@
     },
     "src/host/command.ts": {
       "role": "index",
-      "sha256": "d3a866635875593cbad7d04367497a2a192cf183fa816e5c06defef41a2ddaae",
-      "size": 11601,
-      "normalized_sha256": "d3a866635875593cbad7d04367497a2a192cf183fa816e5c06defef41a2ddaae"
+      "sha256": "4104f7d5e67382bc45f6d50c953044dc444c6b0cb7bc025681aa009240496a1f",
+      "size": 12043,
+      "normalized_sha256": "4104f7d5e67382bc45f6d50c953044dc444c6b0cb7bc025681aa009240496a1f"
     },
     "src/host/compaction.ts": {
       "role": "index",
@@ -239,15 +245,15 @@
     },
     "src/host/system-prompt.ts": {
       "role": "index",
-      "sha256": "5c1471c495ef1b89d15df15dc4d8a333cdfe3d3a69cbbd5b9a12bb48ed913315",
-      "size": 2987,
-      "normalized_sha256": "5c1471c495ef1b89d15df15dc4d8a333cdfe3d3a69cbbd5b9a12bb48ed913315"
+      "sha256": "3cd5bb34db79448e4d91ca8ed94ecc6a3f91f63a70d409d55950895e6b896d15",
+      "size": 3167,
+      "normalized_sha256": "3cd5bb34db79448e4d91ca8ed94ecc6a3f91f63a70d409d55950895e6b896d15"
     },
     "src/host/tools.ts": {
       "role": "index",
-      "sha256": "120d870be6e47cda8356f02cb22905982dcdaf8c326fd2ba34ec65e5c9af98a5",
-      "size": 30678,
-      "normalized_sha256": "120d870be6e47cda8356f02cb22905982dcdaf8c326fd2ba34ec65e5c9af98a5"
+      "sha256": "fe3468fb54e64597c987aff41922f082a111c07f216c1108b287bfeb2d158472",
+      "size": 31481,
+      "normalized_sha256": "fe3468fb54e64597c987aff41922f082a111c07f216c1108b287bfeb2d158472"
     },
     "src/host/types.ts": {
       "role": "index",
@@ -275,9 +281,9 @@
     },
     "src/skill/SKILL.en.md": {
       "role": "index",
-      "sha256": "0497aac0508b0c0a259f807df6c247d002401a1046b93c5944769c891870c1f1",
+      "sha256": "09e15076701fe5865cae3ed5af0ff96300188096329743db5d5a66296c6509eb",
       "size": 5209,
-      "normalized_sha256": "0497aac0508b0c0a259f807df6c247d002401a1046b93c5944769c891870c1f1"
+      "normalized_sha256": "09e15076701fe5865cae3ed5af0ff96300188096329743db5d5a66296c6509eb"
     },
     "src/skill/SKILL.md": {
       "role": "index",
