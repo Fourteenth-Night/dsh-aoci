@@ -4,6 +4,7 @@
 
 | 版本 | 主要内容 |
 |---|---|
+| 0.2.4 | P0/P1 可用性改进：① `/aoci` 指令与系统提示内置 Entry 撰写契约（F≤160/R≤360≤8项/A≤400≤6项/S 按重要度档、标签 A+B+C+[D]+E）与正确顺序（overview→attestation→maintain→update_entry→verify/check→guide）；② 新增 `aoci_cognition` action=`validate` 本地预校验，`update_entry` 提交前自动预校验，减少 repair_required 往返；③ maintain 结果自动附 E 档建议（行数→T/S/M/L）；④ 同仓库并发写锁（state/aoci/locks）；⑤ Volumes v1 错误提示映射（禁用 legacy index/scope/onboard）；⑥ `minAociVersion` 默认升至 0.1.0-rc21 |
 | 0.2.3 | 新增静态工具 `aoci_cognition`（action=rules/overview/get_entries/search/maintain/update_entry/remove_entry/header/report）：在插件加载时注册、懒绑定仓库，**PTC 与 native 工具模式均可用**（解决 PTC 会话拿不到动态 MCP 工具、无法建索引的问题）；桥新增 `ensure`/`call`；共享仓库定位器（上溯父目录/defaultRoot/最近项目） |
 | 0.2.2 | `/aoci` 无参定位增加多级回退：会话工作区 → 上溯父目录（最多 8 层）→ `defaultRoot` → 最近绑定的项目；定位失败时给出可操作提示（解决桌面端默认工作区不是 Git 仓库时报错的问题） |
 | 0.2.1 | **适配 DSH 0.2.0-rc.2（cordis 4.0.4）**。① 工具面优化：`toolSurface=compact`（默认）仅暴露 `aoci_overview` + 聚合入口 `aoci_call`，确定性工具合并为 `aoci_query`，模型可见工具从 20 个降至 11 个；② 上下文预算：`ctx.tokenMeter` 压力感知 + 压缩折叠策略（fold/fold+compact）；③ 增量刷新：`aoci_refresh`（记录 lastHead + git diff 变更集 + 分批维护指令）、`aoci_build_status`；④ 治理审计：结构化 `aoci-events.jsonl` + `aoci_audit` 报告 + `governance` 分级；⑤ 最小权限：aoci 经 `ctx.subprocess` 受管执行（env 白名单/超时/取消/有界输出）、`readOnly` 模式、`httpRoutes` 默认关闭；⑥ 二进制安全：SHA-256 + `minAociVersion` 校验与缓存；⑦ 质量：依赖矩阵升级至 0.2.0-rc.2、28 单测、GitHub Actions CI。另含 0.2.0 早期功能：`/aoci` 无参自动定位、二进制自动探测、动态绑定持久化、桥自动重连、git 漂移状态、`/aoci` 选项化 |

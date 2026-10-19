@@ -35,7 +35,7 @@ AOCI-CODE is licensed FSL-1.1-MIT (source-available); this plugin **does not bun
 | Audit | `aoci_audit` | Runs verify/check, reports HEAD vs maintained-baseline drift and the structured audit-event timeline |
 | Build status | `aoci_build_status` | Recent build/maintain/verify runs and current bindings |
 | System Cognition | `aoci_query {kind: relations\|impact\|lineage\|db}` (compact) · `aoci_relations`, `aoci_impact <object>`, `aoci_lineage`, `aoci_db <source>` (full) | Dependency projection, impact analysis, lineage, database preflight |
-| Static cognition entry | `aoci_cognition { action, project?, path?, args? }` | Works in **both PTC and native tool modes** (registered at plugin load, lazy-binds the repo): rules/overview/maintain/update_entry/search/header/report |
+| Static cognition entry | `aoci_cognition { action, project?, path?, args? }` | Works in **both PTC and native tool modes** (registered at plugin load, lazy-binds the repo): rules/overview/maintain/update_entry/search/header/report, plus `action: "validate"` for local entry pre-validation (F≤160, R≤360/8, A≤400/6, S by importance band). |
 | Agent-driven binding | `aoci_use <path>`, `aoci_unbind <slug>` | Autonomous repository selection |
 | Slash command | `/aoci [path]` | One-shot onboarding (verify + bind + instruct agent to build) |
 
@@ -93,7 +93,7 @@ After `/aoci`, the agent builds the index (overview → batched maintain → ver
 |---|---|---|
 | `binaryPath` | `C:/aoci/bin/aoci.exe` | Stable path to the verified `aoci` binary (auto-detected when empty). |
 | `binarySha256` | `` | Expected SHA-256; mismatch blocks binding. |
-| `minAociVersion` | `0.1.0-rc18` | Minimum accepted `aoci` version (e.g. `0.1.0-rc21`). |
+| `minAociVersion` | `0.1.0-rc21` | Minimum accepted `aoci` version; Volumes v1 repositories require rc21+. |
 | `envPassthrough` | `[]` | Extra environment variable names forwarded to `aoci` (whitelist always keeps system vars + `AOCI_DB_*`). |
 | `toolSurface` | `compact` | `compact` (aggregate entry, fewer schemas) or `full` (all nine MCP tools). |
 | `autoRefresh` | `status` | `off` / `status` (drift reported) / `nightly` (runs nightly verify). |

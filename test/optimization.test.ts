@@ -1,6 +1,6 @@
 // 优化项纯函数单测（v0.2.0：工具面/预算/审计/刷新/二进制校验）
 import { describe, it, expect, afterEach } from 'vitest'
-import { compareVersions, parseAociVersion, sanitizedEnv, compactToolResult, estimateToolSurfaceChars, parseAociInput, normalizeAociAction } from '../src/host/util'
+import { compareVersions, parseAociVersion, sanitizedEnv, compactToolResult, estimateToolSurfaceChars, parseAociInput, normalizeAociAction, validateEntryText, humanizeAociError } from '../src/host/util'
 import { foldPolicy } from '../src/host/compaction'
 import { formatAuditReport } from '../src/host/audit'
 import { buildRefreshPlan } from '../src/host/refresh'
@@ -109,5 +109,28 @@ describe('AOCI 动作归一化', () => {
     expect(normalizeAociAction('aoci_maintain')).toBe('aoci_maintain')
     expect(normalizeAociAction(' update_entry ')).toBe('aoci_update_entry')
     expect(normalizeAociAction('nope')).toBe('')
+  })
+})
+
+describe('Entry 预校验', () => {
+  it('合法条目通过', () => {
+    const ok = 'index.ts[EE9M]: F:Wires the plugin | R:code:src/host/config.ts | A:apply | S:apply must return undefined'
+    expect(validateEntryText(ok)).toEqual([])
+  })
+  it('坏标签被报告', () => {
+    expect(validateEntryText('x[ZZ]: F:a | R:- | A:- | S:-').some(f => f.field === 'tag')).toBe(true)
+  })
+  it('超长 F/S 被报告（低重要度档 S 上限 50 tokens）', () => {
+    const bad = 'x[EG3T]: F:' + 'a'.repeat(200) + ' | R:- | A:- | S:' + 'b'.repeat(300)
+    const findings = validateEntryText(bad)
+    expect(findings.some(f => f.field === 'F')).toBe(true)
+    expect(findings.some(f => f.field === 'S')).toBe(true)
+  })
+})
+
+describe('错误提示翻译', () => {
+  it('Volumes v1 与 repair_required 给出提示', () => {
+    expect(humanizeAociError('cannot modify Volumes v1 formal cognition')).toContain('aoci_cognition')
+    expect(humanizeAociError('repair_required')).toContain('F≤160')
   })
 })

@@ -2,14 +2,15 @@
 // toolSurface=compact 时合并查询类工具并省略低频工具（省 token）；full 暴露全量。
 // 语义九工具仍走 MCP 通道（mcp__aoci-<slug>__* 或聚合 aoci_call）。
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
-import { promises as fsP } from 'node:fs'
+import { promises as fsP, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { EvidenceStore } from './evidence'
 import { subprocessAvailable, runAoci } from './cli'
 import { installHint } from './aoci-bin'
 import { isGitRepo, gitHead, gitDirty } from './workspace'
-import { slugFromRoot, resolveProjectPath, detectAociBinary, estimateToolSurfaceChars, normalizeAociAction } from './util'
+import { slugFromRoot, resolveProjectPath, detectAociBinary, estimateToolSurfaceChars, normalizeAociAction, validateEntryText, humanizeAociError } from './util'
+import { acquireLock, releaseLock } from './lock'
 import { locateRepo } from './repo-locate'
 import { buildRefreshPlan } from './refresh'
 import { appendAudit, readAudit, formatAuditReport } from './audit'
@@ -172,7 +173,14 @@ export function installTools(ctx: Context, deps: ToolDeps) {
           return 'scan 失败(exit ' + sc.exitCode + '): ' + (sc.stderr || sc.stdout).slice(0, 400)
         }
       }
-      const br = await deps.bridge.bind(resolved, binary)
+      const lock = await acquireLock(deps.stateDir, slug)
+      if (!lock.ok) return '仓库 ' + slug + ' 正被另一个会话写入（pid=' + (lock.holder?.pid ?? '?') + '），请等待其完成。'
+      let br: { ok: boolean; namespace: string; tools: string[]; message: string }
+      try {
+        br = await deps.bridge.bind(resolved, binary)
+      } finally {
+        await releaseLock(deps.stateDir, slug).catch(() => undefined)
+      }
       audit({ ts: new Date().toISOString(), action: 'bind', project: slug, ok: br.ok, detail: br.message.slice(0, 200) })
       if (!br.ok) return br.message
       const head = gitHead(resolved)
@@ -209,8 +217,23 @@ export function installTools(ctx: Context, deps: ToolDeps) {
     },
     output: { schema: { type: 'string' }, render: (_a, v) => toolText(v) },
     async execute(args) {
-      const tool = normalizeAociAction(String((args as { action?: string }).action ?? ''))
-      if (!tool) return '未知 action: ' + String((args as { action?: string }).action ?? '') + '（可选：rules/overview/get_entries/search/maintain/update_entry/remove_entry/header/report）'
+      const rawAction = String((args as { action?: string }).action ?? '')
+      // 本地预校验入口：action=validate，args.entries 为待校验的 Entry 文本数组或 {new_entry} 数组
+      if (rawAction === 'validate') {
+        const list = ((args as { args?: { entries?: unknown } }).args ?? {}).entries
+        const items = Array.isArray(list) ? list : []
+        if (!items.length) return 'validate 需要 args.entries（新条目文本数组或 {new_entry} 数组）'
+        const lines: string[] = []
+        let bad = 0
+        items.forEach((it, i) => {
+          const text = typeof it === 'string' ? it : String((it as { new_entry?: string }).new_entry ?? '')
+          const findings = validateEntryText(text)
+          if (findings.length) { bad++; lines.push('#' + (i + 1) + ' ' + text.slice(0, 60) + ' → ' + findings.map((f) => f.field + ': ' + f.message).join('; ')) }
+        })
+        return bad ? '预校验发现 ' + bad + '/' + items.length + ' 条问题：\n' + lines.join('\n') : '预校验通过：' + items.length + ' 条 Entry 格式与长度均符合契约。'
+      }
+      const tool = normalizeAociAction(rawAction)
+      if (!tool) return '未知 action: ' + rawAction + '（可选：rules/overview/get_entries/search/maintain/update_entry/remove_entry/header/report/validate）'
       const writeActions = ['aoci_maintain', 'aoci_update_entry', 'aoci_remove_entry']
       if (deps.readOnly && writeActions.includes(tool)) return '只读模式：已禁止维护类操作。'
       const binary = (await deps.binaryPath()) ?? detectAociBinary()
@@ -231,14 +254,39 @@ export function installTools(ctx: Context, deps: ToolDeps) {
       if (!ver.ok) return '二进制校验失败：' + (ver.reason ?? '未知原因') + '\n' + installHint()
       const br = await deps.bridge.ensure(root, binary)
       if (!br.ok) return br.message
+      const callArgs = ((args as { args?: Record<string, unknown> }).args ?? {})
+      if (writeActions.includes(tool)) {
+        // 并发锁：同一仓库同一时刻只允许一个会话正式写
+        const lock = await acquireLock(deps.stateDir, br.slug)
+        if (!lock.ok) return '仓库 ' + br.slug + ' 正被另一个会话写入（pid=' + (lock.holder?.pid ?? '?') + '，自 ' + (lock.holder?.acquiredAt ?? '?') + '）。请等待其完成或稍后重试。'
+      }
       try {
-        const callArgs = ((args as { args?: Record<string, unknown> }).args ?? {})
-        const out = await deps.bridge.call(br.slug, tool, callArgs)
+        // 预校验：update_entry 提交前先在本地检查长度/标签，避免 repair_required 往返
+        if (tool === 'aoci_update_entry') {
+          const list = (callArgs.entries ?? []) as unknown
+          if (Array.isArray(list)) {
+            const bad: string[] = []
+            list.forEach((it, i) => {
+              const text = String((it as { new_entry?: string }).new_entry ?? '')
+              const findings = validateEntryText(text)
+              if (findings.length) bad.push('#' + (i + 1) + ' ' + findings.map((f) => f.field + ': ' + f.message).join('; '))
+            })
+            if (bad.length) {
+              const msg = '本地预校验未通过（未提交）：\n' + bad.join('\n') + '\n请修正后重交同一完整批次（F≤160、R≤360/8项、A≤400/6项、S 按重要度档）。'
+              audit({ ts: new Date().toISOString(), action: 'cognition', project: br.slug, ok: false, detail: 'update_entry precheck failed' })
+              return msg
+            }
+          }
+        }
+        let out = await deps.bridge.call(br.slug, tool, callArgs)
+        if (tool === 'aoci_maintain') out = appendScaleHints(root, out)
         audit({ ts: new Date().toISOString(), action: 'cognition', project: br.slug, ok: true, detail: tool })
         return out
       } catch (e) {
         audit({ ts: new Date().toISOString(), action: 'cognition', project: br.slug, ok: false, detail: tool + ': ' + (e as Error).message.slice(0, 120) })
-        return 'AOCI 调用失败（' + tool + '）: ' + (e as Error).message
+        return humanizeAociError('AOCI 调用失败（' + tool + '）: ' + (e as Error).message)
+      } finally {
+        if (writeActions.includes(tool)) await releaseLock(deps.stateDir, br.slug).catch(() => undefined)
       }
     },
   }))
@@ -430,5 +478,30 @@ export function installTools(ctx: Context, deps: ToolDeps) {
         return '预检未通过(exit ' + pre.exitCode + '): ' + (pre.stderr || pre.stdout).slice(0, 300)
       },
     }))
+  }
+}
+
+/** 解析 maintain 结果的候选列表，为每个候选文件追加 E 档建议（行数 → T/S/M/L） */
+function appendScaleHints(root: string, out: string): string {
+  try {
+    const jsonStart = out.indexOf('{')
+    if (jsonStart < 0) return out
+    const parsed = JSON.parse(out.slice(jsonStart)) as { candidates?: Array<{ path?: string }> }
+    const candidates = parsed.candidates ?? []
+    if (!candidates.length) return out
+    const hints: string[] = []
+    for (const c of candidates.slice(0, 40)) {
+      const p = c.path
+      if (!p) continue
+      try {
+        const text = readFileSync(root + '/' + p, 'utf8') as string
+        const lines = text.split('\n').length
+        const band = lines >= 400 ? 'L' : lines >= 200 ? 'M' : lines >= 100 ? 'S' : 'T'
+        hints.push('- ' + p + ' (' + lines + ' 行) → 建议 E=' + band)
+      } catch { /* ignore */ }
+    }
+    return hints.length ? out + '\n\n[E 档建议]\n' + hints.join('\n') : out
+  } catch {
+    return out
   }
 }

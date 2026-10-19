@@ -35,7 +35,7 @@ export const AociConfigSchema = Schema.object({
   binaryPath: Schema.string().default('C:/aoci/bin/aoci.exe').description('aoci 稳定绝对路径（不捆绑，需从官方 Release 获取并校验；可留空启用自动探测）'),
   binaryAutoDetect: Schema.boolean().default(true).description('未配置 binaryPath 时自动探测常见目录与 PATH 中的 aoci 二进制'),
   binarySha256: Schema.string().default('').description('可选：期望的 aoci 二进制 SHA-256（hex，大小写不敏感）；配置后不匹配则拒绝使用'),
-  minAociVersion: Schema.string().default('0.1.0-rc18').description('最低 aoci 版本（如 0.1.0-rc21）；低于该版本拒绝绑定并提示升级'),
+  minAociVersion: Schema.string().default('0.1.0-rc21').description('最低 aoci 版本（如 0.1.0-rc21）；低于该版本拒绝绑定并提示升级'),
   envPassthrough: Schema.array(Schema.string()).default([]).description('额外允许透传给 aoci 子进程的环境变量名（默认仅 PATH/系统变量与 AOCI_DB_*）'),
   toolSurface: ToolSurfaceSchema,
   autoRefresh: AutoRefreshSchema,

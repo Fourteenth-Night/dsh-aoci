@@ -34,6 +34,7 @@ AOCI-CODE 采用 FSL-1.1-MIT（source-available）；本插件**不捆绑**其�
 | 刷新 | `aoci_refresh` | 计算上次维护 HEAD 以来的 git 变更集，给出分批增量维护指令 |
 | 审计 | `aoci_audit` | verify/check + HEAD 漂移 + 结构化事件时间线 |
 | 构建状态 | `aoci_build_status` | 最近构建/维护/验证记录与绑定 |
+| 静态认知入口 | `aoci_cognition { action, project?, path?, args? }` | PTC/native 均可用（加载时注册 + 懒绑定）；支持 `action="validate"` 本地预校验条目（F≤160、R≤360/8 项、A≤400/6 项、S 按重要度档） |
 | 系统查询 | `aoci_query {kind}`(compact) 或 `aoci_relations`/`aoci_impact`/`aoci_lineage`/`aoci_db`(full) | 依赖投影/影响分析/来源链/数据库预检 |
 | 自主选路 | `aoci_use`、`aoci_unbind` | 按需绑定/解绑仓库 |
 | 斜杠命令 | `/aoci [路径]` | 一键接入（校验 + 绑定 + 指示建索引） |
@@ -74,7 +75,7 @@ dsh plugin --profile <name> add ./dsh-aoci-<version>.tgz
 |---|---|---|
 | `binaryPath` | `C:/aoci/bin/aoci.exe` | aoci 二进制路径（留空自动探测） |
 | `binarySha256` | `` | 期望 SHA-256；不匹配拒绝使用 |
-| `minAociVersion` | `0.1.0-rc18` | 最低版本（建议随上游升至 rc21） |
+| `minAociVersion` | `0.1.0-rc21` | 最低版本；Volumes v1 仓库需 rc21+ |
 | `envPassthrough` | `[]` | 额外透传的环境变量名（白名单恒含系统变量与 `AOCI_DB_*`） |
 | `toolSurface` | `compact` | 工具面 compact/full |
 | `autoRefresh` | `status` | off/status/nightly（夜间自动 verify） |

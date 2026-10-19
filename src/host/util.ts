@@ -260,3 +260,57 @@ export function normalizeAociAction(action: string): string {
   const known = ['aoci_rules', 'aoci_overview', 'aoci_get_entries', 'aoci_search', 'aoci_maintain', 'aoci_update_entry', 'aoci_remove_entry', 'aoci_header', 'aoci_report']
   return known.includes(full) ? full : ''
 }
+
+// ---------- P0/P1：条目撰写契约与错误提示 ----------
+
+export interface EntryFinding {
+  field: 'F' | 'R' | 'A' | 'S' | 'tag' | 'format'
+  message: string
+}
+
+/** 本地预校验一条 Entry：格式、标签、F/R/A/S 长度与配额（避免提交后才 repair_required） */
+export function validateEntryText(entry: string): EntryFinding[] {
+  const findings: EntryFinding[] = []
+  const m = entry.match(/^([^\[]+)\[([^\]]+)\]:\s*([\s\S]*)$/)
+  if (!m) return [{ field: 'format', message: '期望格式 filename[tag]: F:… | R:… | A:… | S:…' }]
+  const tags = m[2] ?? ''
+  const tagMatch = tags.match(/^[A-Z][A-Z]([1-9])(?:[A-Z])?[A-Z]$/)
+  if (!tagMatch) findings.push({ field: 'tag', message: '标签应为 A+B+C+[D]+E（两字母+重要度1-9+可选D+字母，如 EG7T）' })
+  const cDigit = tagMatch ? Number(tagMatch[1]) : 5
+  const fields: Record<string, string> = {}
+  for (const part of (m[3] ?? '').split('|')) {
+    const idx = part.indexOf(':')
+    if (idx < 0) continue
+    const key = part.slice(0, idx).trim().toUpperCase()
+    if (key === 'F' || key === 'R' || key === 'A' || key === 'S') fields[key] = part.slice(idx + 1).trim()
+  }
+  const runes = (s: string) => [...s].length
+  const limits: Record<string, number> = { F: 160, R: 360, A: 400 }
+  for (const k of ['F', 'R', 'A'] as const) {
+    const v = fields[k]
+    if (!v) { findings.push({ field: k, message: k + ' 字段缺失' }); continue }
+    const limit = limits[k] ?? 160
+    if (runes(v) > limit) findings.push({ field: k, message: k + ' 超过 ' + limit + ' runes（当前 ' + runes(v) + '）' })
+  }
+  const r = fields['R']
+  if (r && r !== '-' && r.split(',').filter(Boolean).length > 8) findings.push({ field: 'R', message: 'R 最多 8 项' })
+  const a = fields['A']
+  if (a && a !== '-' && a.split(',').filter(Boolean).length > 6) findings.push({ field: 'A', message: 'A 最多 6 项' })
+  const s = fields['S']
+  if (s && s !== '-') {
+    const tokens = Math.ceil(Buffer.byteLength(s, 'utf8') / 3)
+    const limit = cDigit >= 8 ? 600 : cDigit >= 4 ? 200 : 50
+    if (tokens > limit) findings.push({ field: 'S', message: 'S 约 ' + tokens + ' tokens，超过 C' + cDigit + ' 档上限 ' + limit })
+  }
+  return findings
+}
+
+/** 把 AOCI 机器错误翻译成可操作提示（Volumes v1 / repair 长度限制） */
+export function humanizeAociError(text: string): string {
+  const t = String(text ?? '')
+  const hints: string[] = []
+  if (/cannot modify Volumes v1 formal cognition/i.test(t)) hints.push('本仓库为 Volumes v1 布局：请使用 aoci_cognition 的 action="maintain"/"update_entry"（对应 MCP aoci_maintain/aoci_update_entry），不要使用 legacy 的 index/scope/onboard 命令。')
+  if (/repair_required/i.test(t)) hints.push('按 findings 只修复指定字段后重交同一完整批次；上限：F≤160 runes、R≤360（≤8 项）、A≤400（≤6 项）、S 按重要度档（C9-8≤600 / C7-4≤200 / C3-1≤50 tokens）。')
+  if (/entry_field_budget_exceeded/i.test(t)) hints.push('字段超限时压缩语义，不要机械截断；可先调用 aoci_cognition 的 action="validate" 做本地预校验。')
+  return hints.length ? t + '\n\n[提示] ' + hints.join(' ') : t
+}

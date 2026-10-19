@@ -116,7 +116,7 @@ export class AociBridge {
         env: sanitizedEnv(),
         stderr: 'pipe',
       })
-      client = new Client({ name: 'dsh-aoci', version: '0.2.3' }, { capabilities: {} })
+      client = new Client({ name: 'dsh-aoci', version: '0.2.4' }, { capabilities: {} })
       await client.connect(transport)
       await client.listTools()
     } catch (e) {
@@ -157,7 +157,7 @@ export class AociBridge {
         const callName = 'mcp__' + namespace + '__aoci_call'
         const def = defineTool({
           name: callName,
-          description: 'AOCI 任意认知工具聚合入口（项目 ' + slug + '）。tool 取九工具之一：' + AOCI_TOOLS.join(' / ') + '；args 为对应工具参数 JSON。',
+          description: 'AOCI 任意认知工具聚合入口（项目 ' + slug + '）。tool 取九工具之一：' + AOCI_TOOLS.join(' / ') + '；args 为对应工具参数 JSON。update_entry 前请先用 aoci_cognition action="validate" 预校验；Volumes v1 只用 maintain/update_entry，禁用 legacy index 命令。',
           parameters: {
             tool: { type: 'string', required: true, description: '九工具之一：' + AOCI_TOOLS.join(', ') },
             args: { type: 'json', description: '工具参数 JSON（如 {"refresh_event_id":"…"}）' },

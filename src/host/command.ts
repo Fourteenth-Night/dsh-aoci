@@ -4,12 +4,13 @@ import type { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { promises as fsP } from 'node:fs'
 import { join } from 'node:path'
-import { safeGet, resolveProjectPath, slugFromRoot, parseAociInput, detectAociBinary } from './util'
+import { safeGet, resolveProjectPath, slugFromRoot, parseAociInput, detectAociBinary, humanizeAociError } from './util'
 import { isGitRepo, gitHead } from './workspace'
 import { installHint } from './aoci-bin'
 import { runAoci } from './cli'
 import { safeLogger } from './logger'
 import { appendAudit } from './audit'
+import { acquireLock, releaseLock } from './lock'
 import type { AociBridge } from './bridge'
 import type { EvidenceStore } from './evidence'
 
@@ -91,7 +92,7 @@ export function installAociCommand(ctx: Context, deps: AociCommandDeps) {
           const bin = await runAoci(ctx, { argv: initArgs, timeoutMs: 120000 })
           void appendAudit(deps.stateDir ?? '', { ts: new Date().toISOString(), action: 'init', project: slug, ok: bin.exitCode === 0, exitCode: bin.exitCode, durationMs: Date.now() - started })
           if (bin.exitCode !== 0 && bin.exitCode !== null) {
-            return { kind: 'error', text: 'init 失败(exit ' + bin.exitCode + '): ' + (bin.stderr || bin.stdout).slice(0, 400) }
+            return { kind: 'error', text: humanizeAociError('init 失败(exit ' + bin.exitCode + '): ' + (bin.stderr || bin.stdout).slice(0, 400)) }
           }
         }
         // 基线已存在时跳过 scan（官方语义：scan 只建首次基线；之后维护走 maintain/update_entry）
@@ -101,11 +102,18 @@ export function installAociCommand(ctx: Context, deps: AociCommandDeps) {
           const sc = await runAoci(ctx, { argv: [binary, '--repo', resolved, 'scan'], timeoutMs: 300000 })
           void appendAudit(deps.stateDir ?? '', { ts: new Date().toISOString(), action: 'scan', project: slug, ok: sc.exitCode === 0, exitCode: sc.exitCode, durationMs: Date.now() - started })
           if (sc.exitCode !== 0 && sc.exitCode !== null) {
-            return { kind: 'error', text: 'scan 失败(exit ' + sc.exitCode + '): ' + (sc.stderr || sc.stdout).slice(0, 400) }
+            return { kind: 'error', text: humanizeAociError('scan 失败(exit ' + sc.exitCode + '): ' + (sc.stderr || sc.stdout).slice(0, 400)) }
           }
         }
 
-        const br = await deps.bridge.bind(resolved, binary)
+        const lock = await acquireLock(deps.stateDir ?? '', slug)
+        if (!lock.ok) return { kind: 'error', text: '仓库 ' + slug + ' 正被另一个会话写入（pid=' + (lock.holder?.pid ?? '?') + '），请等待其完成。' }
+        let br: { ok: boolean; namespace: string; tools: string[]; message: string }
+        try {
+          br = await deps.bridge.bind(resolved, binary)
+        } finally {
+          await releaseLock(deps.stateDir ?? '', slug).catch(() => undefined)
+        }
         void appendAudit(deps.stateDir ?? '', { ts: new Date().toISOString(), action: 'bind', project: slug, ok: br.ok, detail: br.message.slice(0, 200) })
         if (!br.ok) return { kind: 'error', text: br.message }
         const head = gitHead(resolved)
@@ -134,8 +142,15 @@ export function installAociCommand(ctx: Context, deps: AociCommandDeps) {
           : '维护工具：mcp__' + br.namespace + '__aoci_maintain / aoci_update_entry / aoci_rules'
         const strict = (deps.governance ?? 'standard') === 'strict'
         try {
+          const constraints = [
+            'Entry 契约（务必遵守，否则会 repair_required）：filename[tag]: F:… | R:… | A:… | S:…',
+            '- 标签格式 A+B+C+[D]+E（两个字母 + 重要度1-9 + 可选 D + 字母，如 EG7T）',
+            '- F≤160 runes；R≤360 runes 且 ≤8 项（code:path 逗号分隔，无则 -）；A≤400 runes 且 ≤6 项；',
+            '- S 只看不可推断、防错事实，配额按重要度：C9-8≤600 / C7-4≤200 / C3-1≤50 tokens；无则 S:-',
+            '建议先调用 aoci_cognition 的 action="validate" 本地预校验条目，再提交 update_entry。',
+          ].join('\n')
           agent.steer(createUserMessage({
-            content: [{ type: 'text', text: 'AOCI 已就绪（' + br.tools.length + ' 个工具，surface=' + (br.tools.includes('aoci_call') ? 'compact' : 'full') + '）。请为仓库 ' + resolved + ' 建立 AOCI 认知索引：先 ' + overviewTool + ' 读取完整系统认知；' + maintainHint + '；按 Guide 分批 maintain + 整批 update_entry，最后 ' + (strict ? '必须' : '建议') + ' verify/check 证明 aligned。' + dbNote }],
+            content: [{ type: 'text', text: 'AOCI 已就绪（' + br.tools.length + ' 个工具，surface=' + (br.tools.includes('aoci_call') ? 'compact' : 'full') + '）。请为仓库 ' + resolved + ' 建立 AOCI 认知索引，严格按顺序：1) ' + overviewTool + ' 读取完整认知（跟 next_cursor 到 completed=true）；2) 按契约提交 attestation；3) ' + maintainHint + '；4) 按批次交付 update_entry；5) ' + (strict ? '必须' : '建议') + ' verify/check；6) 用 index agent guide 证明 complete=true。\n\n' + constraints + dbNote }],
             source: { kind: 'user' },
           }))
         } catch { /* 提交失败则退化为提示文案 */ }
