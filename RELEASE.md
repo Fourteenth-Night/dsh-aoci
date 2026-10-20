@@ -4,6 +4,7 @@
 
 | 版本 | 主要内容 |
 |---|---|
+| 0.2.6 | ① Skill（中英）重写：工具通道三级优先（aoci_cognition → mcp__aoci-* → 随包驱动脚本）、Volumes v1 边界、条目撰写契约（先 validate）、attestation 同进程要求、收尾 guide 与 git commit 提醒；② 驱动脚本新增 `--preset read|overview|maintain|optimize`，减少多轮调用；③ 质量优化复核通过：`cognition_optimization` 返回 0 目标（48/48 条目、budget healthy、drift 全空） |
 | 0.2.5 | P0/P1 落地：① 工具注册日志与 `aoci_status` 自检（`registeredTools=`，注册失败不再静默）；② `/aoci` 指令双路径（优先 `aoci_cognition`/`mcp__aoci-*`，不可见时使用随包 `scripts/aoci-mcp-driver.mjs`，强调 overview+attestation 必须同一 MCP 进程）；③ 新增 `aoci_cognition action="optimize"`（映射 maintain intent=cognition_optimization，返回 review-required 质量批次）；④ 驱动脚本输出写 `state/aoci/tmp` 并支持 --clean；⑤ steer 提示 maintain 自动附带 E 档建议 |
 | 0.2.4 | P0/P1 可用性改进：① `/aoci` 指令与系统提示内置 Entry 撰写契约（F≤160/R≤360≤8项/A≤400≤6项/S 按重要度档、标签 A+B+C+[D]+E）与正确顺序（overview→attestation→maintain→update_entry→verify/check→guide）；② 新增 `aoci_cognition` action=`validate` 本地预校验，`update_entry` 提交前自动预校验，减少 repair_required 往返；③ maintain 结果自动附 E 档建议（行数→T/S/M/L）；④ 同仓库并发写锁（state/aoci/locks）；⑤ Volumes v1 错误提示映射（禁用 legacy index/scope/onboard）；⑥ `minAociVersion` 默认升至 0.1.0-rc21 |
 | 0.2.3 | 新增静态工具 `aoci_cognition`（action=rules/overview/get_entries/search/maintain/update_entry/remove_entry/header/report）：在插件加载时注册、懒绑定仓库，**PTC 与 native 工具模式均可用**（解决 PTC 会话拿不到动态 MCP 工具、无法建索引的问题）；桥新增 `ensure`/`call`；共享仓库定位器（上溯父目录/defaultRoot/最近项目） |

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-10-18T16:49:29Z",
-  "updated_at": "2026-10-20T01:16:36Z",
+  "updated_at": "2026-10-20T04:51:28Z",
   "files": {
     ".gitattributes": {
       "role": "index",
@@ -47,15 +47,15 @@
     },
     "RELEASE.md": {
       "role": "index",
-      "sha256": "da7b0e23f83f6f5c42c1dd3475686f644c763462e79b09f7ee568e353d2ee0db",
-      "size": 7220,
-      "normalized_sha256": "da7b0e23f83f6f5c42c1dd3475686f644c763462e79b09f7ee568e353d2ee0db"
+      "sha256": "bdc3b8ab15f878a1dba80455e43862b02da2e602b221df2ab7f7a28a25e6e037",
+      "size": 7685,
+      "normalized_sha256": "bdc3b8ab15f878a1dba80455e43862b02da2e602b221df2ab7f7a28a25e6e037"
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "c6ec9ea89e3020d1d249067c120358bb12d4704e666911a067aef7b3ada080fb",
-      "size": 12585,
-      "normalized_sha256": "c6ec9ea89e3020d1d249067c120358bb12d4704e666911a067aef7b3ada080fb"
+      "sha256": "9633d72fdbf5a6f4d804eb4cd4e437b0a9353b4a4d96c483fd5236d1dc2b01c1",
+      "size": 12808,
+      "normalized_sha256": "9633d72fdbf5a6f4d804eb4cd4e437b0a9353b4a4d96c483fd5236d1dc2b01c1"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -89,15 +89,15 @@
     },
     "dsh.plugin.json": {
       "role": "index",
-      "sha256": "d661914f029b3d7a5b03f47ff626d99caaca8c35953c12414bb8ab3c838ef156",
+      "sha256": "354a0c363bc11368e59c8a8763a9a5888604693a7eab274c297e33b7e916bef4",
       "size": 422,
-      "normalized_sha256": "d661914f029b3d7a5b03f47ff626d99caaca8c35953c12414bb8ab3c838ef156"
+      "normalized_sha256": "354a0c363bc11368e59c8a8763a9a5888604693a7eab274c297e33b7e916bef4"
     },
     "package.json": {
       "role": "index",
-      "sha256": "dfeb71ba2049f6a5628fc5cc9325557d901698004cf186f78db5144e7e90bb20",
+      "sha256": "21b2b2825472fa1005dbeb9cda435631ca28d2eeda120bc5e314173479195229",
       "size": 3525,
-      "normalized_sha256": "dfeb71ba2049f6a5628fc5cc9325557d901698004cf186f78db5144e7e90bb20"
+      "normalized_sha256": "21b2b2825472fa1005dbeb9cda435631ca28d2eeda120bc5e314173479195229"
     },
     "pnpm-lock.yaml": {
       "role": "index",
@@ -107,9 +107,9 @@
     },
     "scripts/aoci-mcp-driver.mjs": {
       "role": "index",
-      "sha256": "5e76e240cec193b9983cd814465f3343b545b7891c64ff40e838c348651703d7",
-      "size": 3116,
-      "normalized_sha256": "5e76e240cec193b9983cd814465f3343b545b7891c64ff40e838c348651703d7"
+      "sha256": "fa6e3018f9834e85316a82f66d104e5b0f4103a4f50934e0a3a6ac38063bc151",
+      "size": 3970,
+      "normalized_sha256": "fa6e3018f9834e85316a82f66d104e5b0f4103a4f50934e0a3a6ac38063bc151"
     },
     "scripts/build-client.mjs": {
       "role": "index",
@@ -167,9 +167,9 @@
     },
     "src/host/bridge.ts": {
       "role": "index",
-      "sha256": "852b989a47d4de88b9f63656c31ecc653375645623c5db888853b439517e2583",
+      "sha256": "9097b8efe5fee24d2db6f7e9b982b32c9471da043eaa99c7eeb3840d2034c933",
       "size": 11296,
-      "normalized_sha256": "852b989a47d4de88b9f63656c31ecc653375645623c5db888853b439517e2583"
+      "normalized_sha256": "9097b8efe5fee24d2db6f7e9b982b32c9471da043eaa99c7eeb3840d2034c933"
     },
     "src/host/cli.ts": {
       "role": "index",
@@ -281,15 +281,15 @@
     },
     "src/skill/SKILL.en.md": {
       "role": "index",
-      "sha256": "09e15076701fe5865cae3ed5af0ff96300188096329743db5d5a66296c6509eb",
-      "size": 5209,
-      "normalized_sha256": "09e15076701fe5865cae3ed5af0ff96300188096329743db5d5a66296c6509eb"
+      "sha256": "a4592b9c8db1c5841ed2079bb855d1fbb8b47fda582e9c216f02c766ff41d9f5",
+      "size": 5505,
+      "normalized_sha256": "a4592b9c8db1c5841ed2079bb855d1fbb8b47fda582e9c216f02c766ff41d9f5"
     },
     "src/skill/SKILL.md": {
       "role": "index",
-      "sha256": "47927c7fdd6a3879eadf66e9dda00b187edd198b8911cf91df74f9ffddcf5570",
-      "size": 3991,
-      "normalized_sha256": "47927c7fdd6a3879eadf66e9dda00b187edd198b8911cf91df74f9ffddcf5570"
+      "sha256": "c0e89cff365fe9c48cbab84c3090c0e299ac332431140f16eba2272974947fa7",
+      "size": 5034,
+      "normalized_sha256": "c0e89cff365fe9c48cbab84c3090c0e299ac332431140f16eba2272974947fa7"
     },
     "test/compaction.test.ts": {
       "role": "observe",

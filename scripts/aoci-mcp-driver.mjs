@@ -6,6 +6,7 @@
 //           node scripts/aoci-mcp-driver.mjs --repo <仓库> aoci_maintain '{}'
 //   序列：  node scripts/aoci-mcp-driver.mjs --repo <仓库> --steps steps.json
 //           steps.json = [{"tool":"aoci_overview","args":{"refresh_event_id":"..."}},{"tool":"attestation",...}]
+//   预设：  --preset read|overview|maintain|optimize（单进程执行常用序列）
 //   选项：  --out-dir <目录>（默认 <DSH_HOME>/state/aoci/tmp 或系统临时目录） --clean（结束后清理输出目录）
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
@@ -14,7 +15,7 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 
 const argv = process.argv.slice(2)
-const opt = { repo: process.cwd(), outDir: '', clean: false, steps: '', tool: '', args: '{}' }
+const opt = { repo: process.cwd(), outDir: '', clean: false, steps: '', tool: '', args: '{}', preset: '' }
 const pos = []
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
@@ -22,12 +23,15 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--out-dir') opt.outDir = argv[++i]
   else if (a === '--clean') opt.clean = true
   else if (a === '--steps') opt.steps = argv[++i]
+  else if (a === '--preset') opt.preset = argv[++i]
   else if (a === '--tool') opt.tool = argv[++i]
   else if (a === '--args') opt.args = argv[++i]
+  else if (a === '--args-file') opt.args = '@' + argv[++i]
   else pos.push(a)
 }
 if (!opt.tool && pos.length) opt.tool = pos[0]
 if (!opt.args && pos.length > 1) opt.args = pos[1]
+if (opt.args && opt.args.startsWith('@')) opt.args = readFileSync(opt.args.slice(1), 'utf8')
 const dshHome = process.env.DSH_HOME || join(process.env.USERPROFILE || process.env.HOME || '.', '.dsh')
 const outDir = opt.outDir || (join(dshHome, 'state', 'aoci', 'tmp'))
 mkdirSync(outDir, { recursive: true })
@@ -39,7 +43,7 @@ const writeOut = (name, text) => {
 }
 const aociBin = process.env.AOCI_BIN || 'C:/aoci/bin/aoci.exe'
 const transport = new StdioClientTransport({ command: aociBin, args: ['--repo', opt.repo, 'mcp'], env: process.env, stderr: 'pipe' })
-const client = new Client({ name: 'dsh-aoci-driver', version: '0.2.5' }, { capabilities: {} })
+const client = new Client({ name: 'dsh-aoci-driver', version: '0.2.6' }, { capabilities: {} })
 await client.connect(transport)
 const call = async (tool, args) => {
   const res = await client.callTool({ name: tool, arguments: args ?? {} })
@@ -49,7 +53,16 @@ const call = async (tool, args) => {
   console.log(text)
   return text
 }
-if (opt.steps) {
+const presets = {
+  read: [{ tool: 'aoci_rules' }, { tool: 'aoci_overview' }, { tool: 'aoci_header' }],
+  overview: [{ tool: 'aoci_rules' }, { tool: 'aoci_overview' }],
+  maintain: [{ tool: 'aoci_maintain' }],
+  optimize: [{ tool: 'aoci_maintain', args: { intent: 'cognition_optimization' } }],
+}
+if (opt.preset) {
+  if (!presets[opt.preset]) { console.error('未知 preset: ' + opt.preset + '（可用: ' + Object.keys(presets).join('|') + '）'); process.exit(2) }
+  for (const step of presets[opt.preset]) await call(step.tool, step.args)
+} else if (opt.steps) {
   const steps = JSON.parse(readFileSync(opt.steps, 'utf8'))
   for (const step of steps) await call(step.tool, step.args)
 } else if (opt.tool) {
