@@ -52,11 +52,20 @@ export class AociBridge {
   private bound = new Map<string, BoundServer>()
   private readonly surface: ToolSurface
 
+  private toolsScoped: Context | undefined
+
   constructor(private readonly ctx: Context, opts: { surface?: ToolSurface } = {}) {
     this.surface = opts.surface ?? 'compact'
+    // DSH 0.2.x 服务访问注入门控：提前取得 tools 作用域，供 bind 时注册动态工具
+    const inject = (ctx as unknown as { inject?(keys: string[], cb: (scoped: Context) => void): unknown }).inject
+    if (inject) {
+      try { inject(['tools'], (scoped: Context) => { this.toolsScoped = scoped }) } catch { /* fallback */ }
+    }
   }
 
   private toolsRegistry(): { register(t: unknown): () => void } {
+    const scoped = this.toolsScoped as unknown as { tools?: { register(t: unknown): () => void } } | undefined
+    if (scoped?.tools) return scoped.tools
     return (this.ctx as unknown as { tools: { register(t: unknown): () => void } }).tools
   }
 
@@ -116,7 +125,7 @@ export class AociBridge {
         env: sanitizedEnv(),
         stderr: 'pipe',
       })
-      client = new Client({ name: 'dsh-aoci', version: '0.2.7' }, { capabilities: {} })
+      client = new Client({ name: 'dsh-aoci', version: '0.2.8' }, { capabilities: {} })
       await client.connect(transport)
       await client.listTools()
     } catch (e) {

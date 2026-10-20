@@ -41,9 +41,21 @@ export interface ToolDeps {
 }
 
 export function installTools(ctx: Context, deps: ToolDeps) {
+  // DSH 0.2.x 的服务访问是注入门控的：直接用 ctx.tools 会抛 "cannot get property tools without inject"
+  const inject = (ctx as unknown as { inject?(keys: string[], cb: (scoped: Context) => void): unknown }).inject
+  if (inject) {
+    try {
+      inject(['tools'], (scoped: Context) => installToolsOn(ctx, scoped, deps))
+      return
+    } catch { /* 继续兜底 */ }
+  }
+  installToolsOn(ctx, ctx, deps)
+}
+
+function installToolsOn(ctx: Context, toolCtx: Context, deps: ToolDeps) {
   const register = (tool: ToolDefinition) => {
     try {
-      ;(ctx.tools as unknown as { register(t: ToolDefinition): void }).register(tool)
+      ;(toolCtx.tools as unknown as { register(t: ToolDefinition): void }).register(tool)
       registeredToolNames.push(tool.name)
     } catch (e) {
       // 注册失败不阻塞其余启动，但必须留下日志（此前静默吞错导致"工具不可见"难以排查）

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-10-18T16:49:29Z",
-  "updated_at": "2026-10-20T05:15:07Z",
+  "updated_at": "2026-10-20T05:23:56Z",
   "files": {
     ".gitattributes": {
       "role": "index",
@@ -47,15 +47,15 @@
     },
     "RELEASE.md": {
       "role": "index",
-      "sha256": "f6b839d66f99de0917374d84545a02d621cee99cc2e5deb5ae7b76f9fec98d0e",
-      "size": 8087,
-      "normalized_sha256": "f6b839d66f99de0917374d84545a02d621cee99cc2e5deb5ae7b76f9fec98d0e"
+      "sha256": "e819ea12622dd3f686d6829ad357c1a553c7d30e4ea43b53cc8cb83a7c9591ff",
+      "size": 8509,
+      "normalized_sha256": "e819ea12622dd3f686d6829ad357c1a553c7d30e4ea43b53cc8cb83a7c9591ff"
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "9633d72fdbf5a6f4d804eb4cd4e437b0a9353b4a4d96c483fd5236d1dc2b01c1",
-      "size": 12808,
-      "normalized_sha256": "9633d72fdbf5a6f4d804eb4cd4e437b0a9353b4a4d96c483fd5236d1dc2b01c1"
+      "sha256": "feac9e3dd485dce0de2051fbd5dfcaf4d6ebcc297eabf56c66cc6476f0d54c42",
+      "size": 13003,
+      "normalized_sha256": "feac9e3dd485dce0de2051fbd5dfcaf4d6ebcc297eabf56c66cc6476f0d54c42"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -89,15 +89,15 @@
     },
     "dsh.plugin.json": {
       "role": "index",
-      "sha256": "09a042791d3d38bdbf93f406274d52f7828fe607db2a5520202b12c5997d4b83",
+      "sha256": "9245e55c83127c64819e0714168d763f86aeb884aad6972bad9a6d99ab9522fb",
       "size": 422,
-      "normalized_sha256": "09a042791d3d38bdbf93f406274d52f7828fe607db2a5520202b12c5997d4b83"
+      "normalized_sha256": "9245e55c83127c64819e0714168d763f86aeb884aad6972bad9a6d99ab9522fb"
     },
     "package.json": {
       "role": "index",
-      "sha256": "91bc255e3e1e5410120354750f54fc268ac18ecaad93b004cfa8f2c4ce7c26a3",
+      "sha256": "dfa0bc9e19d18fdc17451f9674b02caf8c8a065bd2233263b7a2cda23f70dac2",
       "size": 3525,
-      "normalized_sha256": "91bc255e3e1e5410120354750f54fc268ac18ecaad93b004cfa8f2c4ce7c26a3"
+      "normalized_sha256": "dfa0bc9e19d18fdc17451f9674b02caf8c8a065bd2233263b7a2cda23f70dac2"
     },
     "pnpm-lock.yaml": {
       "role": "index",
@@ -167,9 +167,9 @@
     },
     "src/host/bridge.ts": {
       "role": "index",
-      "sha256": "a8277383345a665d9589a27e0e29f16668c3133159ff461030a09c5bbd933362",
-      "size": 11296,
-      "normalized_sha256": "a8277383345a665d9589a27e0e29f16668c3133159ff461030a09c5bbd933362"
+      "sha256": "0662a7292bb310404a735072c7de155a34bd5bb4c6f04e1b4777a91ce07abb2b",
+      "size": 11847,
+      "normalized_sha256": "0662a7292bb310404a735072c7de155a34bd5bb4c6f04e1b4777a91ce07abb2b"
     },
     "src/host/cli.ts": {
       "role": "index",
@@ -245,15 +245,15 @@
     },
     "src/host/system-prompt.ts": {
       "role": "index",
-      "sha256": "3cd5bb34db79448e4d91ca8ed94ecc6a3f91f63a70d409d55950895e6b896d15",
-      "size": 3167,
-      "normalized_sha256": "3cd5bb34db79448e4d91ca8ed94ecc6a3f91f63a70d409d55950895e6b896d15"
+      "sha256": "5a9c0e4b8eed5bf66ccbb195252a3899bd3e1241676209159484d457887236d1",
+      "size": 3633,
+      "normalized_sha256": "5a9c0e4b8eed5bf66ccbb195252a3899bd3e1241676209159484d457887236d1"
     },
     "src/host/tools.ts": {
       "role": "index",
-      "sha256": "fe3468fb54e64597c987aff41922f082a111c07f216c1108b287bfeb2d158472",
-      "size": 31481,
-      "normalized_sha256": "fe3468fb54e64597c987aff41922f082a111c07f216c1108b287bfeb2d158472"
+      "sha256": "078b792efe041de2f47629d571e2a41e36515afb3080570d033426d216155577",
+      "size": 31986,
+      "normalized_sha256": "078b792efe041de2f47629d571e2a41e36515afb3080570d033426d216155577"
     },
     "src/host/types.ts": {
       "role": "index",
@@ -275,15 +275,15 @@
     },
     "src/index.ts": {
       "role": "index",
-      "sha256": "d75f7580d5517885c7027a7e0b9075e4c7e1cec22f91dcb096c34f44fe30d6dc",
-      "size": 10221,
-      "normalized_sha256": "d75f7580d5517885c7027a7e0b9075e4c7e1cec22f91dcb096c34f44fe30d6dc"
+      "sha256": "706fe9d9d9e6487fe97d70aee5e6512be1cf7c3a6852a2ce608dc54097c0d3b6",
+      "size": 10592,
+      "normalized_sha256": "706fe9d9d9e6487fe97d70aee5e6512be1cf7c3a6852a2ce608dc54097c0d3b6"
     },
     "src/skill/SKILL.en.md": {
       "role": "index",
-      "sha256": "51e3b4e8cc104cad2e722e45e851e15484a3f8dd7b5ad237fbb5d854f394a90d",
+      "sha256": "fb3859ef98d0a85a9eb9e5f4437551a2627529f4cd7a389757b7dfa905512cf6",
       "size": 5504,
-      "normalized_sha256": "51e3b4e8cc104cad2e722e45e851e15484a3f8dd7b5ad237fbb5d854f394a90d"
+      "normalized_sha256": "fb3859ef98d0a85a9eb9e5f4437551a2627529f4cd7a389757b7dfa905512cf6"
     },
     "src/skill/SKILL.md": {
       "role": "index",

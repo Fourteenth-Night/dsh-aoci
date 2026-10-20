@@ -4,6 +4,7 @@
 
 | 版本 | 主要内容 |
 |---|---|
+| 0.2.8 | **关键修复：DSH 0.2.x 服务访问注入门控**——`ctx.tools`/`ctx.settings`/`ctx.systemPrompt` 改用 `ctx.inject([...], scoped => …)`（原先直接属性访问抛 `cannot get property "tools" without inject`，导致全部工具（含 `aoci_cognition`）与动态桥工具注册失败、系统提示/设置未注入）。修复后 10 个确定性工具与 2 个 compact MCP 工具可正常注册 |
 | 0.2.7 | **驱动脚本零依赖化**：`scripts/aoci-mcp-driver.mjs` 改为原生 JSON-RPC over stdio（不再 import @modelcontextprotocol/sdk），任何 Node（含系统 node）可直接运行，修复 `ERR_MODULE_NOT_FOUND` 导致的回退失败；保留 `--preset read/overview/maintain/optimize`、`--args-file`、`--out-dir/--clean`。索引维护对齐（48 条目、verify/check 通过） |
 | 0.2.6 | ① Skill（中英）重写：工具通道三级优先（aoci_cognition → mcp__aoci-* → 随包驱动脚本）、Volumes v1 边界、条目撰写契约（先 validate）、attestation 同进程要求、收尾 guide 与 git commit 提醒；② 驱动脚本新增 `--preset read|overview|maintain|optimize`，减少多轮调用；③ 质量优化复核通过：`cognition_optimization` 返回 0 目标（48/48 条目、budget healthy、drift 全空） |
 | 0.2.5 | P0/P1 落地：① 工具注册日志与 `aoci_status` 自检（`registeredTools=`，注册失败不再静默）；② `/aoci` 指令双路径（优先 `aoci_cognition`/`mcp__aoci-*`，不可见时使用随包 `scripts/aoci-mcp-driver.mjs`，强调 overview+attestation 必须同一 MCP 进程）；③ 新增 `aoci_cognition action="optimize"`（映射 maintain intent=cognition_optimization，返回 review-required 质量批次）；④ 驱动脚本输出写 `state/aoci/tmp` 并支持 --clean；⑤ steer 提示 maintain 自动附带 E 档建议 |

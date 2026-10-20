@@ -4,6 +4,14 @@ import type { ProjectConfig } from './types'
 import { safeGet } from './util'
 
 export function installSystemPrompt(ctx: Context, projects: ProjectConfig[], opts: { surface?: 'compact' | 'full'; governance?: 'strict' | 'standard' | 'relaxed'; readOnly?: boolean; surfacePrefix?: string } = {}) {
+  const inject = (ctx as unknown as { inject?(keys: string[], cb: (scoped: Context) => void): unknown }).inject
+  if (inject) {
+    try { inject(['systemPrompt'], (scoped: Context) => sections(scoped, projects, opts)); return } catch { /* fallback */ }
+  }
+  sections(ctx, projects, opts)
+}
+
+function sections(ctx: Context, projects: ProjectConfig[], opts: { surface?: 'compact' | 'full'; governance?: 'strict' | 'standard' | 'relaxed'; readOnly?: boolean } = {}) {
   const sys = safeGet<{ section(opts: { name: string; order: number; text: string }): void }>(ctx, 'systemPrompt')
   if (!sys) return
   const summaries = projects.map((p) => {

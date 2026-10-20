@@ -198,7 +198,15 @@ export const apply = (ctx: Context, config?: AociConfig) => {
 }
 
 function installSettings(ctx: Context, cfg: AociConfig) {
-  const settings = safeGet<{ register(ns: string, schema: unknown, opts?: { base?: unknown }): unknown }>(ctx, 'settings')
+  const inject = (ctx as unknown as { inject?(keys: string[], cb: (scoped: Context) => void): unknown }).inject
+  if (inject) {
+    try { inject(['settings'], (scoped: Context) => registerSettings(ctx, scoped, cfg)); return } catch { /* fallback */ }
+  }
+  registerSettings(ctx, ctx, cfg)
+}
+
+function registerSettings(ctx: Context, scoped: Context, cfg: AociConfig) {
+  const settings = safeGet<{ register(ns: string, schema: unknown, opts?: { base?: unknown }): unknown }>(scoped, 'settings')
   if (!settings) return
   try {
     settings.register('aoci', AociConfigSchema, { base: cfg })
