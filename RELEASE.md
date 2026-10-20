@@ -4,6 +4,7 @@
 
 | 版本 | 主要内容 |
 |---|---|
+| 0.2.9 | ① **大结果防截断**：aoci_cognition 结果超过 12K chars 时写入 state/aoci/tmp/ 并返回 body_file/body_sha256/body_bytes/end_marker + HEAD 预览，避免 overview 被宿主截断导致 attestation 误判； ② **受管子进程回退**：aoci_verify/check 等在 PTC 子分派下报「子进程服务未挂载」时自动降级 node spawn； ③ 索引随 0.2.8 会话优化批次更新（34 条替换，E 档 5→0，verify/check 通过） |
 | 0.2.8 | **关键修复：DSH 0.2.x 服务访问注入门控**——`ctx.tools`/`ctx.settings`/`ctx.systemPrompt` 改用 `ctx.inject([...], scoped => …)`（原先直接属性访问抛 `cannot get property "tools" without inject`，导致全部工具（含 `aoci_cognition`）与动态桥工具注册失败、系统提示/设置未注入）。修复后 10 个确定性工具与 2 个 compact MCP 工具可正常注册 |
 | 0.2.7 | **驱动脚本零依赖化**：`scripts/aoci-mcp-driver.mjs` 改为原生 JSON-RPC over stdio（不再 import @modelcontextprotocol/sdk），任何 Node（含系统 node）可直接运行，修复 `ERR_MODULE_NOT_FOUND` 导致的回退失败；保留 `--preset read/overview/maintain/optimize`、`--args-file`、`--out-dir/--clean`。索引维护对齐（48 条目、verify/check 通过） |
 | 0.2.6 | ① Skill（中英）重写：工具通道三级优先（aoci_cognition → mcp__aoci-* → 随包驱动脚本）、Volumes v1 边界、条目撰写契约（先 validate）、attestation 同进程要求、收尾 guide 与 git commit 提醒；② 驱动脚本新增 `--preset read|overview|maintain|optimize`，减少多轮调用；③ 质量优化复核通过：`cognition_optimization` 返回 0 目标（48/48 条目、budget healthy、drift 全空） |

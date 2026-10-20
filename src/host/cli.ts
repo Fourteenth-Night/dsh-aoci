@@ -40,7 +40,12 @@ export function subprocessAvailable(ctx?: Context): boolean {
 /** 执行 aoci：优先 ctx.subprocess（环境清洗/超时/取消/输出上限），降级 node spawn */
 export async function runAoci(ctx: Context, spec: AociCliSpec): Promise<AociCliOutcome> {
   const managed = getSubprocess(ctx)
-  if (managed && process.env.DSH_AOCI_NATIVE_SPAWN !== '1') return runManaged(managed, spec)
+  if (managed && process.env.DSH_AOCI_NATIVE_SPAWN !== '1') {
+    const out = await runManaged(managed, spec)
+    // PTC 子分派等场景下受管服务可能"未挂载"：启动失败（exitCode=null 且非超时）时回退 node spawn
+    if (out.exitCode === null && !out.timedOut && /未挂载|not mounted|not available|服务/i.test(out.stderr)) return runNode(spec)
+    return out
+  }
   return runNode(spec)
 }
 
