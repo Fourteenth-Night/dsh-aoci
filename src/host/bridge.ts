@@ -116,7 +116,7 @@ export class AociBridge {
         env: sanitizedEnv(),
         stderr: 'pipe',
       })
-      client = new Client({ name: 'dsh-aoci', version: '0.2.6' }, { capabilities: {} })
+      client = new Client({ name: 'dsh-aoci', version: '0.2.7' }, { capabilities: {} })
       await client.connect(transport)
       await client.listTools()
     } catch (e) {

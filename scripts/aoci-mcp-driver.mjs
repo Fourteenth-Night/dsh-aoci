@@ -1,18 +1,18 @@
 #!/usr/bin/env node
-// AOCI MCP 驱动脚本：解决"会话工具集看不到 mcp__aoci-* 工具"时的兜底路径。
+// AOCI MCP 驱动脚本（0.2.7）：零依赖，直接用原生 JSON-RPC over stdio 驱动 `aoci --repo <path> mcp`。
+// 不需要 @modelcontextprotocol/sdk，因此任何 Node.js（含系统 node）都能运行。
 // 关键：overview 与 attestation 必须在同一个 MCP 进程内完成（否则会丢 delivery 状态）。
 // 用法：
 //   单次：  node scripts/aoci-mcp-driver.mjs --repo <仓库> aoci_rules
 //           node scripts/aoci-mcp-driver.mjs --repo <仓库> aoci_maintain '{}'
+//   预设：  node scripts/aoci-mcp-driver.mjs --repo <仓库> --preset read|overview|maintain|optimize
 //   序列：  node scripts/aoci-mcp-driver.mjs --repo <仓库> --steps steps.json
-//           steps.json = [{"tool":"aoci_overview","args":{"refresh_event_id":"..."}},{"tool":"attestation",...}]
-//   预设：  --preset read|overview|maintain|optimize（单进程执行常用序列）
+//   参数：  --args '<json>' 或 --args-file <file>（也可用 @file 作为位置参数）
 //   选项：  --out-dir <目录>（默认 <DSH_HOME>/state/aoci/tmp 或系统临时目录） --clean（结束后清理输出目录）
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { spawn } from 'node:child_process'
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, dirname } from 'node:path'
+import { createInterface } from 'node:readline'
+import { join } from 'node:path'
 
 const argv = process.argv.slice(2)
 const opt = { repo: process.cwd(), outDir: '', clean: false, steps: '', tool: '', args: '{}', preset: '' }
@@ -23,36 +23,69 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--out-dir') opt.outDir = argv[++i]
   else if (a === '--clean') opt.clean = true
   else if (a === '--steps') opt.steps = argv[++i]
-  else if (a === '--preset') opt.preset = argv[++i]
   else if (a === '--tool') opt.tool = argv[++i]
   else if (a === '--args') opt.args = argv[++i]
   else if (a === '--args-file') opt.args = '@' + argv[++i]
+  else if (a === '--preset') opt.preset = argv[++i]
   else pos.push(a)
 }
 if (!opt.tool && pos.length) opt.tool = pos[0]
-if (!opt.args && pos.length > 1) opt.args = pos[1]
+if ((opt.args === '{}' || !opt.args) && pos.length > 1) opt.args = pos[1]
 if (opt.args && opt.args.startsWith('@')) opt.args = readFileSync(opt.args.slice(1), 'utf8')
+
 const dshHome = process.env.DSH_HOME || join(process.env.USERPROFILE || process.env.HOME || '.', '.dsh')
-const outDir = opt.outDir || (join(dshHome, 'state', 'aoci', 'tmp'))
+const outDir = opt.outDir || join(dshHome, 'state', 'aoci', 'tmp')
 mkdirSync(outDir, { recursive: true })
 const stamp = Date.now()
+const aociBin = process.env.AOCI_BIN || 'C:/aoci/bin/aoci.exe'
+
+const child = spawn(aociBin, ['--repo', opt.repo, 'mcp'], { stdio: ['pipe', 'pipe', 'inherit'] })
+const rl = createInterface({ input: child.stdout })
+let seq = 0
+const pending = new Map()
+rl.on('line', (line) => {
+  const t = line.trim()
+  if (!t.startsWith('{')) return
+  let msg
+  try { msg = JSON.parse(t) } catch { return }
+  if (msg.id !== undefined && pending.has(msg.id)) {
+    const { resolve } = pending.get(msg.id)
+    pending.delete(msg.id)
+    resolve(msg)
+  }
+})
+const request = (method, params) => new Promise((resolve, reject) => {
+  const id = ++seq
+  pending.set(id, { resolve })
+  const timer = setTimeout(() => { pending.delete(id); reject(new Error('MCP 请求超时: ' + method)) }, 120000)
+  pending.set(id, { resolve: (m) => { clearTimeout(timer); resolve(m) } })
+  child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n')
+})
+const notify = (method, params) => child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method, params }) + '\n')
 const writeOut = (name, text) => {
   const file = join(outDir, stamp + '-' + name + '.json')
   writeFileSync(file, text, 'utf8')
   return file
 }
-const aociBin = process.env.AOCI_BIN || 'C:/aoci/bin/aoci.exe'
-const transport = new StdioClientTransport({ command: aociBin, args: ['--repo', opt.repo, 'mcp'], env: process.env, stderr: 'pipe' })
-const client = new Client({ name: 'dsh-aoci-driver', version: '0.2.6' }, { capabilities: {} })
-await client.connect(transport)
 const call = async (tool, args) => {
-  const res = await client.callTool({ name: tool, arguments: args ?? {} })
-  const text = (res.content ?? []).map((c) => c.text ?? '').join('')
+  const res = await request('tools/call', { name: tool, arguments: args ?? {} })
+  if (res.error) { console.error('MCP error: ' + JSON.stringify(res.error)); process.exit(1) }
+  const content = res.result?.content ?? []
+  const text = content.map((c) => c.text ?? '').join('')
   const file = writeOut(tool, text)
   console.log('=== ' + tool + ' (saved: ' + file + ') ===')
   console.log(text)
   return text
 }
+
+const init = await request('initialize', {
+  protocolVersion: '2025-06-18',
+  capabilities: {},
+  clientInfo: { name: 'dsh-aoci-driver', version: '0.2.7' },
+})
+if (init.error) { console.error('initialize failed: ' + JSON.stringify(init.error)); process.exit(1) }
+notify('notifications/initialized', {})
+
 const presets = {
   read: [{ tool: 'aoci_rules' }, { tool: 'aoci_overview' }, { tool: 'aoci_header' }],
   overview: [{ tool: 'aoci_rules' }, { tool: 'aoci_overview' }],
@@ -68,9 +101,10 @@ if (opt.preset) {
 } else if (opt.tool) {
   await call(opt.tool, JSON.parse(opt.args || '{}'))
 } else {
-  console.error('用法: node aoci-mcp-driver.mjs --repo <仓库> <tool> [argsJson] | --steps steps.json')
+  console.error('用法: node aoci-mcp-driver.mjs --repo <仓库> <tool> [argsJson] | --preset read|overview|maintain|optimize | --steps steps.json')
   process.exit(2)
 }
-await client.close()
+child.stdin.end()
+child.kill()
 if (opt.clean) rmSync(outDir, { recursive: true, force: true })
 process.exit(0)
