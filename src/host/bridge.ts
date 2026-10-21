@@ -8,6 +8,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { AOCI_TOOLS } from './types'
 import { slugFromRoot, mcpServerName, sanitizedEnv, compactToolResult } from './util'
 import { safeLogger } from './logger'
+import { persistOversized, TOOL_RESULT_LIMIT } from './persist'
 
 export type ToolSurface = 'compact' | 'full'
 
@@ -51,9 +52,11 @@ export class AociBridge {
   private readonly surface: ToolSurface
 
   private toolsScoped: Context | undefined
+  private readonly stateDir: string | undefined
 
-  constructor(private readonly ctx: Context, opts: { surface?: ToolSurface } = {}) {
+  constructor(private readonly ctx: Context, opts: { surface?: ToolSurface; stateDir?: string } = {}) {
     this.surface = opts.surface ?? 'compact'
+    this.stateDir = opts.stateDir
     // DSH 0.2.x 服务访问注入门控：提前取得 tools 作用域，供 bind 时注册动态工具
     const inject = (ctx as unknown as { inject?(keys: string[], cb: (scoped: Context) => void): unknown }).inject
     if (inject) {
@@ -79,6 +82,12 @@ export class AociBridge {
   }
 
   /** 调用已绑定项目的 AOCI MCP 工具（供静态工具 aoci_cognition 使用） */
+  /** 整形工具结果：超限时落盘并返回元数据，避免 6000 字符截断导致 attestation 无法完成 */
+  private shapeResult(slug: string, tool: string, res: unknown): string {
+    const raw = shapeMcpResult(res)
+    return persistOversized(this.stateDir, slug, tool, raw, TOOL_RESULT_LIMIT)
+  }
+
   async call(slug: string, tool: string, args: Record<string, unknown>): Promise<string> {
     const entry = this.bound.get(slug)
     if (!entry) throw new Error('项目未绑定: ' + slug + '（可先调用 aoci_use 或 aoci_cognition 自动绑定）')
@@ -86,7 +95,7 @@ export class AociBridge {
     const res = await entry.client.callTool({ name: tool, arguments: args })
     const r = res as { isError?: boolean }
     if (r.isError) throw new Error(JSON.stringify(res))
-    return shapeMcpResult(res)
+    return this.shapeResult(slug, tool, res)
   }
 
   /** 当前绑定暴露的工具名（用于状态展示与 token 估算） */
@@ -135,7 +144,7 @@ export class AociBridge {
             const res = await client.callTool({ name: raw, arguments: (args as { input?: Record<string, unknown> }).input ?? {} })
             const r = res as { isError?: boolean }
             if (r.isError) throw new Error(JSON.stringify(res))
-            return shapeMcpResult(res)
+            return self.shapeResult(slug, raw, res)
           } catch (e) {
             self.requestRebind(slug, '工具调用失败: ' + String((e as Error).message).slice(0, 160))
             throw e
@@ -169,7 +178,7 @@ export class AociBridge {
               const res = await client.callTool({ name: tool, arguments: ((args as { args?: Record<string, unknown> }).args ?? {}) })
               const r = res as { isError?: boolean }
               if (r.isError) throw new Error(JSON.stringify(res))
-              return shapeMcpResult(res)
+              return self.shapeResult(slug, tool, res)
             } catch (e) {
               self.requestRebind(slug, '聚合调用失败: ' + String((e as Error).message).slice(0, 160))
               throw e

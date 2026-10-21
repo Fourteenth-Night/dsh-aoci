@@ -20,7 +20,7 @@ AOCI-CODE 提供持久化、Git 版本化、可治理的代码库/数据库认�
 ## 2. 会话开始与接手
 1. `aoci_rules` 一次，确认行为契约；
 2. 一次完整 `aoci_overview`：架构、文件职责、模块边界、关系、约束、标签字典、FRAS 纪律；
-3. 超过传输阈值时按 `continuation_required` 连续跟随 `next_cursor` 到 `completed=true`，**同一进程**内提交 `model-cognition-attestation/v1`（精确 index_sha256 / entry_sequence_sha256 / entry_count + Challenge 答案）；
+3. 超过传输阈值时按 `continuation_required` 连续跟随 `next_cursor` 到 `completed=true`，**同一进程**内提交 `model-cognition-attestation/v1`（精确 index_sha256 / entry_sequence_sha256 / entry_count + Challenge 答案；object_identity 必须用仓库相对路径，如 `src/host/tools.ts`，裸文件名会失配）；
 4. 认知有效后：不重复 Overview、不重复 get_entries/search。
 
 ## 3. 允许的三种完整刷新原因

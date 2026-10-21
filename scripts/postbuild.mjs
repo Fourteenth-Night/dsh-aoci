@@ -4,12 +4,14 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = dirname(fileURLToPath(import.meta.url)) + '/..'
-const src = join(root, 'src/skill/SKILL.md')
-const dst = join(root, 'lib/skill/SKILL.md')
-if (existsSync(src)) {
-  mkdirSync(dirname(dst), { recursive: true })
-  copyFileSync(src, dst)
-  console.log('copied SKILL.md -> lib/skill/SKILL.md')
-} else {
-  console.warn('SKILL.md not found, skip')
+for (const name of ['SKILL.md', 'SKILL.en.md']) {
+  const src = join(root, 'src/skill', name)
+  const dst = join(root, 'lib/skill', name)
+  if (existsSync(src)) {
+    mkdirSync(dirname(dst), { recursive: true })
+    copyFileSync(src, dst)
+    console.log('copied ' + name + ' -> lib/skill/' + name)
+  } else {
+    console.warn(name + ' not found, skip')
+  }
 }

@@ -3,12 +3,11 @@
 // 语义九工具仍走 MCP 通道（mcp__aoci-<slug>__* 或聚合 aoci_call）。
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { promises as fsP, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
-import { createHash } from 'node:crypto'
-import { join as pathJoin } from 'node:path'
+import { persistOversized } from './persist'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { EvidenceStore } from './evidence'
-import { subprocessAvailable, runAoci } from './cli'
+import { runAoci } from './cli'
 import { installHint } from './aoci-bin'
 import { isGitRepo, gitHead, gitDirty } from './workspace'
 import { slugFromRoot, resolveProjectPath, detectAociBinary, estimateToolSurfaceChars, normalizeAociAction, validateEntryText, humanizeAociError } from './util'
@@ -111,8 +110,7 @@ function installToolsOn(ctx: Context, toolCtx: Context, deps: ToolDeps) {
     parameters: { project: { type: 'string', required: true, description: '项目 slug' } },
     output: { schema: { type: 'string' }, render: (_a, v) => toolText(v) },
     async execute(args) {
-      if (!subprocessAvailable(ctx)) return 'dsh-aoci: 子进程服务未挂载'
-      const binary = (await deps.binaryPath()) ?? detectAociBinary()
+          const binary = (await deps.binaryPath()) ?? detectAociBinary()
       if (!binary) return installHint()
       const p = await resolveProject(args.project)
       if (!p) return '未知项目: ' + args.project
@@ -137,7 +135,6 @@ function installToolsOn(ctx: Context, toolCtx: Context, deps: ToolDeps) {
     parameters: { project: { type: 'string', required: true, description: '项目 slug' } },
     output: { schema: { type: 'string' }, render: (_a, v) => toolText(v) },
     async execute(args) {
-      if (!subprocessAvailable(ctx)) return 'dsh-aoci: 子进程服务未挂载'
       const binary = (await deps.binaryPath()) ?? detectAociBinary()
       if (!binary) return installHint()
       const p = await resolveProject(args.project)
@@ -303,7 +300,7 @@ function installToolsOn(ctx: Context, toolCtx: Context, deps: ToolDeps) {
           }
         }
         let out = await deps.bridge.call(br.slug, tool, callArgs)
-        out = persistLargeResult(deps, br.slug, tool, out)
+        out = persistOversized(deps.stateDir, br.slug, tool, out)
         if (tool === 'aoci_maintain') out = appendScaleHints(root, out)
         audit({ ts: new Date().toISOString(), action: 'cognition', project: br.slug, ok: true, detail: tool })
         return out
@@ -526,29 +523,6 @@ function appendScaleHints(root: string, out: string): string {
       } catch { /* ignore */ }
     }
     return hints.length ? out + '\n\n[E 档建议]\n' + hints.join('\n') : out
-  } catch {
-    return out
-  }
-}
-
-/** 大结果落盘：宿主对工具结果有截断上限（约 13K chars），超限时把完整正文写入 state/aoci/tmp 并返回元数据，避免 attestation 被截断误判 */
-function persistLargeResult(deps: ToolDeps, slug: string, tool: string, out: string): string {
-  const LIMIT = 12000
-  if (out.length <= LIMIT) return out
-  try {
-    const tmp = pathJoin(deps.stateDir, 'aoci', 'tmp')
-    mkdirSync(tmp, { recursive: true })
-    const file = pathJoin(tmp, slug + '-' + tool + '-' + Date.now() + '.txt')
-    writeFileSync(file, out, 'utf8')
-    const sha = createHash('sha256').update(out, 'utf8').digest('hex')
-    const tail = out.trimEnd().slice(-300)
-    const endMarker = /end[_ -]?marker|<!--\s*aoci:end\s*-->/i.test(tail) || tail.endsWith('END')
-    return '[aoci_cognition] ' + tool + ' 结果过大（' + out.length + ' chars > ' + LIMIT + '），完整正文已保存：\n' +
-      'body_file=' + file + '\n' +
-      'body_sha256=' + sha + '\n' +
-      'body_bytes=' + Buffer.byteLength(out, 'utf8') + '\n' +
-      'end_marker=' + (endMarker ? 'present' : 'unknown') + '\n' +
-      '请用 read 工具分段读取 body_file 以获取完整正文（offset/limit），attestation 的 delivery confirmation 使用上述 sha256/bytes/end_marker。\n\n[HEAD 预览]\n' + out.slice(0, 6000)
   } catch {
     return out
   }

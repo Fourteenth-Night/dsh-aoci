@@ -29,7 +29,7 @@ export const apply = (ctx: Context, config?: AociConfig) => {
     binaryPath: config?.binaryPath ?? 'C:/aoci/bin/aoci.exe',
     binaryAutoDetect: config?.binaryAutoDetect ?? true,
     binarySha256: config?.binarySha256 ?? '',
-    minAociVersion: config?.minAociVersion ?? '0.1.0-rc18',
+    minAociVersion: config?.minAociVersion ?? '0.1.0-rc21',
     envPassthrough: config?.envPassthrough ?? [],
     toolSurface: config?.toolSurface ?? 'compact',
     autoRefresh: config?.autoRefresh ?? 'status',
@@ -120,7 +120,7 @@ export const apply = (ctx: Context, config?: AociConfig) => {
   }
 
   // ---- 动态 MCP 桥（工具面 compact/full） ----
-  const bridge = new AociBridge(ctx, { surface: cfg.toolSurface })
+  const bridge = new AociBridge(ctx, { surface: cfg.toolSurface, stateDir })
 
   installTools(ctx, {
     store,

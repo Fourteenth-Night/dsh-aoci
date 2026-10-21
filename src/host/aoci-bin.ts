@@ -32,7 +32,7 @@ export async function inspectBinary(binaryPath: string): Promise<BinaryInfo> {
 }
 
 /** 引导提示：如何从官方 Release 获取并校验（SHA-256），作为 UI/日志文案 */
-export function installHint(release = 'v0.1.0-rc18'): string {
+export function installHint(release = 'v0.1.0-rc21'): string {
   return [
     '未找到 aoci 二进制。请从官方 Release 获取并校验后放到稳定路径：',
     '  gh release download ' + release + ' --repo aoci-spec/aoci-code --pattern \'*windows*\'',
