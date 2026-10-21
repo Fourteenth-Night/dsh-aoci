@@ -251,6 +251,34 @@ function installToolsOn(ctx: Context, toolCtx: Context, deps: ToolDeps) {
         return bad ? '预校验发现 ' + bad + '/' + items.length + ' 条问题：\n' + lines.join('\n') : '预校验通过：' + items.length + ' 条 Entry 格式与长度均符合契约。'
       }
       // optimize：映射到 maintain intent=cognition_optimization（返回 review-required 质量批次）
+      // attest 预校验：检查 attestation 字段格式（sha256/entry_count/challenge 结构/object_identity 路径）
+      if (rawAction === 'attest' || rawAction === 'attestation') {
+        const payload = (((args as { args?: Record<string, unknown> }).args) ?? {}) as Record<string, unknown>
+        const findings: string[] = []
+        const hex64 = (v: unknown) => typeof v === 'string' && /^[0-9a-f]{64}$/i.test(v)
+        const tagRe = /^[A-Z][A-Z][1-9][A-Z]?[A-Z]$/
+        if (!hex64(payload.index_sha256)) findings.push('index_sha256 必须是 64 位十六进制')
+        if (payload.entry_sequence_sha256 !== undefined && !hex64(payload.entry_sequence_sha256)) findings.push('entry_sequence_sha256 必须是 64 位十六进制')
+        if (payload.challenge_digest !== undefined && !hex64(payload.challenge_digest)) findings.push('challenge_digest 必须是 64 位十六进制')
+        if (typeof payload.entry_count !== 'number' || !Number.isInteger(payload.entry_count) || payload.entry_count <= 0) findings.push('entry_count 必须是正整数')
+        const answers = (payload.challenge_answers ?? payload.answers) as unknown
+        if (!Array.isArray(answers)) findings.push('challenge_answers 必须是数组')
+        else {
+          if (answers.length !== 10) findings.push('challenge_answers 应为 10 条（实际 ' + answers.length + '）')
+          answers.forEach((raw, i) => {
+            const a = (raw ?? {}) as Record<string, unknown>
+            const id = String(a.object_identity ?? '')
+            if (!id) findings.push('#' + (i + 1) + ' 缺少 object_identity')
+            else if (id.includes('\\') || /^[A-Za-z]:/.test(id) || id.startsWith('/')) findings.push('#' + (i + 1) + ' object_identity 必须是仓库相对路径（用 / 分隔，如 src/host/tools.ts）')
+            else if (!id.includes('/')) findings.push('#' + (i + 1) + ' object_identity 看起来是裸文件名；请用仓库相对路径（如 src/host/tools.ts）')
+            if (!tagRe.test(String(a.tag ?? ''))) findings.push('#' + (i + 1) + ' tag 格式应为 A+B+C+[D]+E（如 EG7T）')
+            if (!String(a.core_f ?? '').trim()) findings.push('#' + (i + 1) + ' core_f 缺失')
+          })
+        }
+        return findings.length
+          ? 'attest 预校验发现 ' + findings.length + ' 个问题：\n- ' + findings.join('\n- ') + '\n修正后重试；字段含义见 SKILL 第 2 节。'
+          : 'attest 预校验通过：sha256/entry_count/challenge 结构/object_identity 均符合契约，可提交。'
+      }
       const tool = rawAction === 'optimize' ? 'aoci_maintain' : normalizeAociAction(rawAction)
       if (!tool) return '未知 action: ' + rawAction + '（可选：rules/overview/get_entries/search/maintain/update_entry/remove_entry/header/report/validate/optimize）'
       const writeActions = ['aoci_maintain', 'aoci_update_entry', 'aoci_remove_entry']

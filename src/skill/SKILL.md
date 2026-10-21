@@ -10,7 +10,7 @@ AOCI-CODE 提供持久化、Git 版本化、可治理的代码库/数据库认�
 ## 1. 前置与工装
 - 需要官方 AOCI-CODE Release 的 `aoci` 二进制（**≥ 0.1.0-rc21**，Volumes v1 布局必需），Git 仓库，以及支持 stdio MCP 的宿主；DSH 用户安装 dsh-aoci 插件即可。
 - 工具通道（按可用性优先）：
-  1. `aoci_cognition`（dsh-aoci 静态工具，PTC/native 均可用）：`action = rules | overview | get_entries | search | maintain | update_entry | remove_entry | header | report | validate | optimize`；
+  1. `aoci_cognition`（dsh-aoci 静态工具，PTC/native 均可用）：`action = rules | overview | get_entries | search | maintain | update_entry | remove_entry | header | report | validate | attest | optimize`；
   2. `mcp__aoci-<slug>__*`（native 模式直连九工具；compact 面为 `aoci_overview` + `aoci_call`）；
   3. 以上都不在工具列表时：使用随包 `scripts/aoci-mcp-driver.mjs`（单进程驱动 MCP：`--repo <路径> <tool> [args]` 或 `--steps steps.json`；输出写 state/aoci/tmp）。
 - **overview 与 attestation 必须在同一个 MCP 进程内完成**，否则会丢 delivery 状态。
@@ -20,7 +20,7 @@ AOCI-CODE 提供持久化、Git 版本化、可治理的代码库/数据库认�
 ## 2. 会话开始与接手
 1. `aoci_rules` 一次，确认行为契约；
 2. 一次完整 `aoci_overview`：架构、文件职责、模块边界、关系、约束、标签字典、FRAS 纪律；
-3. 超过传输阈值时按 `continuation_required` 连续跟随 `next_cursor` 到 `completed=true`，**同一进程**内提交 `model-cognition-attestation/v1`（精确 index_sha256 / entry_sequence_sha256 / entry_count + Challenge 答案；object_identity 必须用仓库相对路径，如 `src/host/tools.ts`，裸文件名会失配）；
+3. 超过传输阈值时按 `continuation_required` 连续跟随 `next_cursor` 到 `completed=true`，提交 attestation 前先调 `aoci_cognition {action:"attest", args:{...}}` 校验字段，**同一进程**内提交 `model-cognition-attestation/v1`（精确 index_sha256 / entry_sequence_sha256 / entry_count + Challenge 答案；object_identity 必须用仓库相对路径，如 `src/host/tools.ts`，裸文件名会失配）；
 4. 认知有效后：不重复 Overview、不重复 get_entries/search。
 
 ## 3. 允许的三种完整刷新原因

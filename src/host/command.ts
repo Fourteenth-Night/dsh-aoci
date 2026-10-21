@@ -149,6 +149,7 @@ export function installAociCommand(ctx: Context, deps: AociCommandDeps) {
             '- S 只看不可推断、防错事实，配额按重要度：C9-8≤600 / C7-4≤200 / C3-1≤50 tokens；无则 S:-',
             '建议先调用 aoci_cognition 的 action="validate" 本地预校验条目，再提交 update_entry。',
             'maintain 结果会自动附 E 档建议（行数→T/S/M/L）；质量优化可用 aoci_cognition action="optimize"（返回 review-required 批次）。',
+            '新增/删除/重命名文件后，先跑无参 maintain（会为新增文件生成候选），再 update_entry；提交 attestation 前可用 aoci_cognition action="attest" 预校验字段格式。',
             '工具可见性：优先 aoci_cognition（PTC/native 均可用）或 mcp__' + br.namespace + '__*；若两者都不在工具列表，使用随包脚本 scripts/aoci-mcp-driver.mjs（单进程完成 overview+attestation，临时输出写 state/aoci/tmp）。',
           ].join('\n')
           agent.steer(createUserMessage({

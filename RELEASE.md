@@ -4,6 +4,7 @@
 
 | 版本 | 主要内容 |
 |---|---|
+| 0.3.2 | ① `aoci_cognition action="attest"`：提交前本地预校验 attestation（sha256 格式 / entry_count / 10 条 challenge / object_identity 仓库相对路径 / tag / core_f），避免 3/10 重试；② `/aoci` steer 提示“新增文件后先 maintain”；③ SKILL 中英同步 |
 | 0.3.1 | ① **PTC 下大结果截断修复**：`persistOversized`（6000 字符阈值）同时用于静态 `aoci_cognition` 与动态 `mcp__aoci-*` 工具——超限时返回 `body_file/body_sha256/body_bytes/end_marker` + 预览，不再被 `compactToolResult` 截断；② **移除 `aoci_verify/check` 的“子进程服务未挂载”提前返回**，服务不可用时自动回退 node spawn；③ 语义审计修正：`index.ts` 缺省 `minAociVersion` rc18→rc21、`aoci-bin.ts` 提示版本 rc21、`postbuild.mjs` 同时拷贝 `SKILL.en.md`；④ SKILL/steer 明确 attestation 的 object_identity 用仓库相对路径 |
 | 0.3.0 | **零依赖 MCP 客户端**：新增 `src/host/mcp-client.ts`（原生 JSON-RPC over stdio，全管道 + windowsHide），bridge 改用它，**移除 `@modelcontextprotocol/sdk` 运行时依赖**（连带 4.3MB sdk + 5.9MB zod 不再需要，profile 安装期模块解析失败/私有子进程取用/console 句柄继承问题一并消除）；工具面与协议行为不变；集成测试（bind/工具/query）通过 |
 | 0.2.10 | ① 驱动脚本修复 `0x800700E8`（ERROR_BROKEN_PIPE）：不再继承父进程 console 句柄，改为全管道 + windowsHide + stderr 捕获（DSH 无 console 宿主下启动 `aoci.exe mcp` 曾报错）；② SKILL 增加启动约束；③ 索引维护对齐 |
