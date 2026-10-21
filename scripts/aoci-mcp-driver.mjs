@@ -39,7 +39,15 @@ mkdirSync(outDir, { recursive: true })
 const stamp = Date.now()
 const aociBin = process.env.AOCI_BIN || 'C:/aoci/bin/aoci.exe'
 
-const child = spawn(aociBin, ['--repo', opt.repo, 'mcp'], { stdio: ['pipe', 'pipe', 'inherit'] })
+// 不要继承父进程的 console 句柄：DSH 桌面端父进程常无 console（AllocConsole 隐藏控制台失败时），
+// 继承 stderr 会让 CreateProcess 报 0x800700E8（ERROR_BROKEN_PIPE，“管道正在被关闭”）。全部走管道。
+const child = spawn(aociBin, ['--repo', opt.repo, 'mcp'], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
+let stderrTail = ''
+child.stderr.on('data', (d) => { stderrTail = (stderrTail + d.toString('utf8')).slice(-4000) })
+child.on('error', (err) => {
+  console.error('aoci mcp 启动失败: ' + err.message + (stderrTail ? '\nstderr: ' + stderrTail : ''))
+  process.exit(3)
+})
 const rl = createInterface({ input: child.stdout })
 let seq = 0
 const pending = new Map()

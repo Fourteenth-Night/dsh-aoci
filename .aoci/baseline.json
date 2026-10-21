@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-10-18T16:49:29Z",
-  "updated_at": "2026-10-20T08:25:31Z",
+  "updated_at": "2026-10-21T14:17:15Z",
   "files": {
     ".gitattributes": {
       "role": "index",
@@ -47,15 +47,15 @@
     },
     "RELEASE.md": {
       "role": "index",
-      "sha256": "48451a6c7e30c2e7c478fb0db8d170c03733479403458ea31c7d94e311d006f6",
-      "size": 8979,
-      "normalized_sha256": "48451a6c7e30c2e7c478fb0db8d170c03733479403458ea31c7d94e311d006f6"
+      "sha256": "c25d12025b19ef3c29082843d2fced74bf0c0e2af1c7d70b2fd52c304145d8ff",
+      "size": 9256,
+      "normalized_sha256": "c25d12025b19ef3c29082843d2fced74bf0c0e2af1c7d70b2fd52c304145d8ff"
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "ecff8c9f2e1dcc1eb5a0a90dfc50dcdae798a1740ff9969110be7f72e37c7354",
-      "size": 13752,
-      "normalized_sha256": "ecff8c9f2e1dcc1eb5a0a90dfc50dcdae798a1740ff9969110be7f72e37c7354"
+      "sha256": "3bd03601f6eb3530ab45d4ff6d9ce6f75589f3256a83dda84609d4186ed4da6e",
+      "size": 13791,
+      "normalized_sha256": "3bd03601f6eb3530ab45d4ff6d9ce6f75589f3256a83dda84609d4186ed4da6e"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -89,15 +89,15 @@
     },
     "dsh.plugin.json": {
       "role": "index",
-      "sha256": "62f88320ce7e0f2680ccdd6aacd7f8d4461d8958b0166c37b8f09dff4ba98e83",
-      "size": 422,
-      "normalized_sha256": "62f88320ce7e0f2680ccdd6aacd7f8d4461d8958b0166c37b8f09dff4ba98e83"
+      "sha256": "52134187ff50a97625d2ef885d560ec3706a327655094379dd8df14b5ac7c21b",
+      "size": 423,
+      "normalized_sha256": "52134187ff50a97625d2ef885d560ec3706a327655094379dd8df14b5ac7c21b"
     },
     "package.json": {
       "role": "index",
-      "sha256": "3a75064cffd417e5173c38ed477e0f5b372031754d90d972f12a9f2551ee5729",
-      "size": 3525,
-      "normalized_sha256": "3a75064cffd417e5173c38ed477e0f5b372031754d90d972f12a9f2551ee5729"
+      "sha256": "d43e91b21a17e05f69f99addb740baa01924a6a833b5f39101481cc524cc74f4",
+      "size": 3526,
+      "normalized_sha256": "d43e91b21a17e05f69f99addb740baa01924a6a833b5f39101481cc524cc74f4"
     },
     "pnpm-lock.yaml": {
       "role": "index",
@@ -107,9 +107,9 @@
     },
     "scripts/aoci-mcp-driver.mjs": {
       "role": "index",
-      "sha256": "d7691b1e2120e58004830d0c9050e831e6cd03093bcd012d13c429b179474cf4",
-      "size": 5225,
-      "normalized_sha256": "d7691b1e2120e58004830d0c9050e831e6cd03093bcd012d13c429b179474cf4"
+      "sha256": "4d457a9e3005d3615df67efda12b20d9abb398dce0be9ff852c3a13d889a0157",
+      "size": 5766,
+      "normalized_sha256": "4d457a9e3005d3615df67efda12b20d9abb398dce0be9ff852c3a13d889a0157"
     },
     "scripts/build-client.mjs": {
       "role": "index",
@@ -167,9 +167,9 @@
     },
     "src/host/bridge.ts": {
       "role": "index",
-      "sha256": "7f911bb8b6003c7688057fe6ee520b781b7b95a8b033cd88f506630853709bff",
-      "size": 11847,
-      "normalized_sha256": "7f911bb8b6003c7688057fe6ee520b781b7b95a8b033cd88f506630853709bff"
+      "sha256": "8bf5d8f07071440f630bd4f58d96760387df1e4a709cfdb8b0580eef9df2af83",
+      "size": 11848,
+      "normalized_sha256": "8bf5d8f07071440f630bd4f58d96760387df1e4a709cfdb8b0580eef9df2af83"
     },
     "src/host/cli.ts": {
       "role": "index",
@@ -281,15 +281,15 @@
     },
     "src/skill/SKILL.en.md": {
       "role": "index",
-      "sha256": "3691b7502cf92c3c4d038a6a0fdcf680c8c3924a92fbd3020b63995bc6253846",
-      "size": 5504,
-      "normalized_sha256": "3691b7502cf92c3c4d038a6a0fdcf680c8c3924a92fbd3020b63995bc6253846"
+      "sha256": "86c30f930bfda1ac04491ea4916d60d78596647c0306e5e7b10e9ca579b87dc8",
+      "size": 5787,
+      "normalized_sha256": "86c30f930bfda1ac04491ea4916d60d78596647c0306e5e7b10e9ca579b87dc8"
     },
     "src/skill/SKILL.md": {
       "role": "index",
-      "sha256": "c0e89cff365fe9c48cbab84c3090c0e299ac332431140f16eba2272974947fa7",
-      "size": 5034,
-      "normalized_sha256": "c0e89cff365fe9c48cbab84c3090c0e299ac332431140f16eba2272974947fa7"
+      "sha256": "94cbda74aec59c681d5db975ce574bf452de937e4dba38a36c7516becc733e16",
+      "size": 5329,
+      "normalized_sha256": "94cbda74aec59c681d5db975ce574bf452de937e4dba38a36c7516becc733e16"
     },
     "test/compaction.test.ts": {
       "role": "observe",

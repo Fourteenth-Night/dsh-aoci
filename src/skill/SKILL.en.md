@@ -17,6 +17,7 @@ AOCI-CODE provides a persistent, Git-versioned, governed cognition map of a code
   2. `mcp__aoci-<slug>__*` (nine tools in native mode; the compact surface is `aoci_overview` + `aoci_call`);
   3. If neither is in the tool list, use the bundled `scripts/aoci-mcp-driver.mjs` (single-process MCP driver: `--repo <path> <tool> [args]` or `--steps steps.json`; outputs under state/aoci/tmp).
 - **Overview and attestation must run in the same MCP process**, otherwise delivery state is lost.
+> Launch constraint: do **not** spawn `aoci.exe ... mcp` with inherited console handles (`stdio: ['pipe','pipe','inherit']`) from a console-less host — Windows reports `0x800700E8` (ERROR_BROKEN_PIPE). Use the bundled driver (full pipes) or `['pipe','pipe','pipe']` + windowsHide.
 
 ## 2. Session start and hand-off
 1. Call `aoci_rules` once to confirm the behaviour contract.

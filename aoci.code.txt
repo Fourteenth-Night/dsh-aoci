@@ -26,7 +26,7 @@ dsh-aoci-plugin-design.md[SG6L]: F:Earlier copy of the combined design document 
 ===C:/Users/ZhouHan/deepseek-harness/projects/dsh-aoci/scripts/===
 build-client.mjs[XV6T]: F:Builds the browser half as CJS, wraps it for DSH __ModuleLoader__.load, copies skill assets | R:code:src/client.ts,code:lib/client.js | A:- | S:The wrapper is required; plain ESM output fails to load in the Web client
 postbuild.mjs[XV5T]: F:Copies src/skill/SKILL.md into lib/skill for the plugin manifest skill contribution | R:code:src/skill/SKILL.md,code:dsh.plugin.json | A:- | S:Skips silently when the source is missing; skill then fails to load
-aoci-mcp-driver.mjs[XV6S]: F:Fallback MCP driver: runs one aoci tool, a step sequence or a preset in a single process | R:code:src/host/cli.ts | A:- | S:Writes outputs to state/aoci/tmp; overview+attestation must share one process; presets read/overview/maintain/optimize
+aoci-mcp-driver.mjs[XV6T]: F:Zero-dependency MCP driver: runs a tool, a step sequence or a preset in one process over raw JSON-RPC | R:code:src/host/cli.ts | A:- | S:Uses full pipes and windowsHide so console-less hosts avoid ERROR_BROKEN_PIPE (0x800700E8); writes state/aoci/tmp; overview and attestation must share one process
 
 ===C:/Users/ZhouHan/deepseek-harness/projects/dsh-aoci/src/===
 client.ts[EU6T]: F:Client half entry registering browser UI components through the __ModuleLoader__ protocol | R:code:src/client/setup.tsx,code:src/client/board.tsx,code:src/client/panel.tsx,code:build-client.mjs | A:- | S:Must stay CJS-compatible via the loader wrapper; top-level ESM imports break registration
@@ -61,5 +61,5 @@ workspace.ts[RG6T]: F:Git and filesystem helpers: repo checks, HEAD, drift sets,
 lock.ts[RW6T]: F:Concurrency lock: one session per repository performs formal writes | R:code:src/host/tools.ts,code:src/host/command.ts | A:acquireLock,releaseLock,LockInfo | S:Lock state lives in state/aoci/locks/<slug>.lock; stale locks from dead PIDs are overwritten
 
 ===C:/Users/ZhouHan/deepseek-harness/projects/dsh-aoci/src/skill/===
-SKILL.en.md[SG8L]: F:English skill document: AOCI collaboration protocol with tool-channel fallback, Volumes v1 boundary and Entry authoring contract | R:code:src/skill/SKILL.md | A:- | S:Must stay in sync with SKILL.md and the machine contract; Entry limits and flow must match the tools
-SKILL.md[SG8T]: F:Chinese skill document: AOCI collaboration protocol with tool-channel fallback, Volumes v1 boundary and Entry authoring contract | R:code:src/skill/SKILL.en.md | A:- | S:Must mirror SKILL.en.md semantics and the machine contract; do not invent tag syntax or limits
+SKILL.en.md[SG8T]: F:English skill: AOCI protocol with tool channels, Volumes v1 boundary, Entry contract, launch constraints | R:code:src/skill/SKILL.md | A:- | S:Must stay in sync with SKILL.md and the machine contract; never spawn aoci mcp with inherited console handles
+SKILL.md[SG8T]: F:Chinese skill: AOCI collaboration protocol with tool channels, Volumes v1 boundary, Entry contract, launch constraints | R:code:src/skill/SKILL.en.md | A:- | S:Must mirror SKILL.en.md and the machine contract; never spawn aoci mcp with inherited console handles

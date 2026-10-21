@@ -14,6 +14,8 @@ AOCI-CODE 提供持久化、Git 版本化、可治理的代码库/数据库认�
   2. `mcp__aoci-<slug>__*`（native 模式直连九工具；compact 面为 `aoci_overview` + `aoci_call`）；
   3. 以上都不在工具列表时：使用随包 `scripts/aoci-mcp-driver.mjs`（单进程驱动 MCP：`--repo <路径> <tool> [args]` 或 `--steps steps.json`；输出写 state/aoci/tmp）。
 - **overview 与 attestation 必须在同一个 MCP 进程内完成**，否则会丢 delivery 状态。
+> 启动约束：**不要**用 `stdio: ['pipe','pipe','inherit']` 之类继承 console 句柄的方式拉起 `aoci.exe ... mcp`——DSH 宿主无 console 时会报 `0x800700E8`（ERROR_BROKEN_PIPE）。使用随包驱动脚本（全管道）或 `stdio: ['pipe','pipe','pipe']` + windowsHide。
+
 
 ## 2. 会话开始与接手
 1. `aoci_rules` 一次，确认行为契约；

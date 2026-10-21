@@ -4,6 +4,7 @@
 
 | 版本 | 主要内容 |
 |---|---|
+| 0.2.10 | ① 驱动脚本修复 `0x800700E8`（ERROR_BROKEN_PIPE）：不再继承父进程 console 句柄，改为全管道 + windowsHide + stderr 捕获（DSH 无 console 宿主下启动 `aoci.exe mcp` 曾报错）；② SKILL 增加启动约束；③ 索引维护对齐 |
 | 0.2.9 | ① **大结果防截断**：aoci_cognition 结果超过 12K chars 时写入 state/aoci/tmp/ 并返回 body_file/body_sha256/body_bytes/end_marker + HEAD 预览，避免 overview 被宿主截断导致 attestation 误判； ② **受管子进程回退**：aoci_verify/check 等在 PTC 子分派下报「子进程服务未挂载」时自动降级 node spawn； ③ 索引随 0.2.8 会话优化批次更新（34 条替换，E 档 5→0，verify/check 通过） |
 | 0.2.8 | **关键修复：DSH 0.2.x 服务访问注入门控**——`ctx.tools`/`ctx.settings`/`ctx.systemPrompt` 改用 `ctx.inject([...], scoped => …)`（原先直接属性访问抛 `cannot get property "tools" without inject`，导致全部工具（含 `aoci_cognition`）与动态桥工具注册失败、系统提示/设置未注入）。修复后 10 个确定性工具与 2 个 compact MCP 工具可正常注册 |
 | 0.2.7 | **驱动脚本零依赖化**：`scripts/aoci-mcp-driver.mjs` 改为原生 JSON-RPC over stdio（不再 import @modelcontextprotocol/sdk），任何 Node（含系统 node）可直接运行，修复 `ERR_MODULE_NOT_FOUND` 导致的回退失败；保留 `--preset read/overview/maintain/optimize`、`--args-file`、`--out-dir/--clean`。索引维护对齐（48 条目、verify/check 通过） |
