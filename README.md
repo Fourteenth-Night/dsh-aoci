@@ -20,7 +20,7 @@ AOCI-CODE is licensed FSL-1.1-MIT (source-available); this plugin **does not bun
 
 - **Tested runtime**: DSH 0.2.0-rc.2 (harness runtime `^0.2.0-rc.2`, cordis `^4.0.4`); web profile. Compatibility metadata declares `^0.2.0-rc.2`.
 - **Peer dependencies** (provided by the host at boot): `@deepseek-ai/cordis`, `dsh-settings`, `dsh-system-prompt`, `dsh-tools`, `dsh-jobs`, `dsh-llm`, `react`, `react-dom`.
-- **Runtime dependencies**: `schemastery`, `@modelcontextprotocol/sdk`.
+- **Runtime dependencies**: `schemastery` only — the MCP stdio client is bundled in the plugin (zero SDK dependency).
 - **Prerequisite binary**: `aoci` from the official AOCI-CODE Release (default `C:/aoci/bin/aoci.exe`), verified by SHA-256 and a configurable minimum version (`minAociVersion`, default `0.1.0-rc18`; upstream latest is 0.1.0-rc21).
 
 ## Model-Facing Surface

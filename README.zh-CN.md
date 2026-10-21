@@ -20,7 +20,7 @@ AOCI-CODE 采用 FSL-1.1-MIT（source-available）；本插件**不捆绑**其�
 
 - **实测运行环境**：DSH 0.2.0-rc.2（harness 运行时 `^0.2.0-rc.2`，cordis `^4.0.4`）；web profile。
 - **Peer 依赖**（宿主提供）：`@deepseek-ai/cordis`、`dsh-settings`、`dsh-system-prompt`、`dsh-tools`、`dsh-jobs`、`dsh-llm`、`react`、`react-dom`。
-- **运行时依赖**：`schemastery`、`@modelcontextprotocol/sdk`。
+- **运行时依赖**：仅 `schemastery`；MCP stdio 客户端已内置（零 SDK 依赖）。
 - **前置二进制**：官方 AOCI-CODE Release 的 `aoci`（默认 `C:/aoci/bin/aoci.exe`），SHA-256 + 最低版本（`minAociVersion`，默认 `0.1.0-rc18`；上游最新 rc21）校验。
 
 ## 模型可见面

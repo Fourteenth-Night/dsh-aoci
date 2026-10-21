@@ -4,6 +4,7 @@
 
 | 版本 | 主要内容 |
 |---|---|
+| 0.3.0 | **零依赖 MCP 客户端**：新增 `src/host/mcp-client.ts`（原生 JSON-RPC over stdio，全管道 + windowsHide），bridge 改用它，**移除 `@modelcontextprotocol/sdk` 运行时依赖**（连带 4.3MB sdk + 5.9MB zod 不再需要，profile 安装期模块解析失败/私有子进程取用/console 句柄继承问题一并消除）；工具面与协议行为不变；集成测试（bind/工具/query）通过 |
 | 0.2.10 | ① 驱动脚本修复 `0x800700E8`（ERROR_BROKEN_PIPE）：不再继承父进程 console 句柄，改为全管道 + windowsHide + stderr 捕获（DSH 无 console 宿主下启动 `aoci.exe mcp` 曾报错）；② SKILL 增加启动约束；③ 索引维护对齐 |
 | 0.2.9 | ① **大结果防截断**：aoci_cognition 结果超过 12K chars 时写入 state/aoci/tmp/ 并返回 body_file/body_sha256/body_bytes/end_marker + HEAD 预览，避免 overview 被宿主截断导致 attestation 误判； ② **受管子进程回退**：aoci_verify/check 等在 PTC 子分派下报「子进程服务未挂载」时自动降级 node spawn； ③ 索引随 0.2.8 会话优化批次更新（34 条替换，E 档 5→0，verify/check 通过） |
 | 0.2.8 | **关键修复：DSH 0.2.x 服务访问注入门控**——`ctx.tools`/`ctx.settings`/`ctx.systemPrompt` 改用 `ctx.inject([...], scoped => …)`（原先直接属性访问抛 `cannot get property "tools" without inject`，导致全部工具（含 `aoci_cognition`）与动态桥工具注册失败、系统提示/设置未注入）。修复后 10 个确定性工具与 2 个 compact MCP 工具可正常注册 |
@@ -34,7 +35,7 @@
 
 ## 依赖与合规
 
-- 运行时依赖：`schemastery`、`@modelcontextprotocol/sdk`；peer 依赖（宿主提供）：`@deepseek-ai/cordis`、`dsh-settings`、`dsh-system-prompt`、`dsh-tools`、`dsh-jobs`、`dsh-llm`、`react`、`react-dom` 等；
+- 运行时依赖：仅 `schemastery`（MCP stdio 客户端内置）；peer 依赖（宿主提供）：`@deepseek-ai/cordis`、`dsh-settings`、`dsh-system-prompt`、`dsh-tools`、`dsh-jobs`、`dsh-llm`、`react`、`react-dom` 等；
 - **不捆绑 AOCI-CODE 二进制**（FSL-1.1-MIT source-available）：插件引导从官方 Release 下载并做 SHA-256 校验；
 - 全部 `@deepseek-ai/*` 依赖均取自 npm 公开包（MIT）。
 

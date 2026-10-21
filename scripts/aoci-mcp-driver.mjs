@@ -89,7 +89,7 @@ const call = async (tool, args) => {
 const init = await request('initialize', {
   protocolVersion: '2025-06-18',
   capabilities: {},
-  clientInfo: { name: 'dsh-aoci-driver', version: '0.2.7' },
+  clientInfo: { name: 'dsh-aoci-driver', version: '0.3.0' },
 })
 if (init.error) { console.error('initialize failed: ' + JSON.stringify(init.error)); process.exit(1) }
 notify('notifications/initialized', {})

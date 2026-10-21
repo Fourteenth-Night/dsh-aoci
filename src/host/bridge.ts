@@ -2,8 +2,7 @@
 // 命名与 dsh-mcp-client 一致：mcp__aoci-<slug>__<tool>。
 // toolSurface=compact 时只注册 aoci_overview + 聚合入口 aoci_call（省 token）；full 注册全部九工具。
 // 另提供 ensure/call 供静态工具 aoci_cognition 懒绑定调用（保证 PTC 模式也可用）。
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { McpStdioClient } from './mcp-client'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Context } from '@deepseek-ai/cordis'
 import { AOCI_TOOLS } from './types'
@@ -25,8 +24,7 @@ interface BoundServer {
   namespace: string
   root: string
   binaryPath: string
-  transport: StdioClientTransport
-  client: Client
+  client: McpStdioClient
   disposers: Array<() => void>
   rebinding: boolean
   retryTimer?: ReturnType<typeof setTimeout>
@@ -69,14 +67,6 @@ export class AociBridge {
     return (this.ctx as unknown as { tools: { register(t: unknown): () => void } }).tools
   }
 
-  private childOf(t: StdioClientTransport): unknown {
-    try {
-      return (t as unknown as { getChildProcess?(): unknown }).getChildProcess?.() ?? (t as unknown as { _childProcess?: unknown })._childProcess
-    } catch {
-      return undefined
-    }
-  }
-
   isBound(slug: string): boolean { return this.bound.has(slug) }
 
   /** 懒绑定：已绑定则复用，否则按 root+binaryPath 建立 */
@@ -116,17 +106,17 @@ export class AociBridge {
     }
     if (existing) await this.unbindInternal(slug)
 
-    let transport: StdioClientTransport
-    let client: Client
+    let client: McpStdioClient
     try {
-      transport = new StdioClientTransport({
+      // 零依赖 MCP 客户端：全管道 + windowsHide，避免 console 句柄继承导致的 0x800700E8
+      client = new McpStdioClient({
         command: binaryPath,
         args: ['--repo', root, 'mcp'],
         env: sanitizedEnv(),
-        stderr: 'pipe',
+        clientName: 'dsh-aoci',
+        clientVersion: '0.3.0',
       })
-      client = new Client({ name: 'dsh-aoci', version: '0.2.10' }, { capabilities: {} })
-      await client.connect(transport)
+      await client.connect()
       await client.listTools()
     } catch (e) {
       return { ok: false, slug, namespace, tools: [], message: '绑定失败（无法连接 aoci mcp）：' + (e as Error).message }
@@ -190,11 +180,8 @@ export class AociBridge {
       } catch { /* ignore */ }
     }
 
-    const entry: BoundServer = { slug, namespace, root, binaryPath, transport, client, disposers, rebinding: false }
-    const child = this.childOf(transport)
-    if (child && typeof child === 'object' && 'on' in child) {
-      ;(child as { on(e: string, cb: () => void): void }).on('exit', () => self.requestRebind(slug, 'aoci mcp 进程退出'))
-    }
+    const entry: BoundServer = { slug, namespace, root, binaryPath, client, disposers, rebinding: false }
+    client.onExit((reason) => self.requestRebind(slug, 'aoci mcp 连接异常: ' + reason.slice(0, 160)))
     this.bound.set(slug, entry)
     const tools = this.boundTools(slug)
     safeLogger(this.ctx).info('dsh-aoci: 桥已绑定 ' + slug + '（' + tools.length + ' 工具, surface=' + this.surface + '）')
@@ -236,7 +223,6 @@ export class AociBridge {
     if (entry.retryTimer) { clearTimeout(entry.retryTimer); entry.retryTimer = undefined }
     for (const d of entry.disposers) { try { d() } catch { /* ignore */ } }
     try { await entry.client.close() } catch { /* ignore */ }
-    try { ;(entry.transport as unknown as { _childProcess?: { kill(): void } })._childProcess?.kill?.() } catch { /* ignore */ }
     this.bound.delete(slug)
     return true
   }
