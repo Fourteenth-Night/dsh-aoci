@@ -2,11 +2,13 @@
 // 双面插件：包根 exports "."（本文件）；exports "./client" 为浏览器半边。
 // 安装：dsh plugin --profile <name> add ./dsh-aoci-0.2.1.tgz
 import { join } from 'node:path'
+import { existsSync, mkdirSync, copyFileSync } from 'node:fs'
 import type { Context } from '@deepseek-ai/cordis'
 import { AociConfigSchema, type AociConfig } from './host/config'
 import type { ProjectRecord } from './host/types'
 import { EvidenceStore } from './host/evidence'
 import { inspectBinary, installHint } from './host/aoci-bin'
+import { evidenceDir, sweepTmp } from './host/paths'
 import { isGitRepo, checkIgnoreDiscipline, gitHead } from './host/workspace'
 import { slugFromRoot, mcpServerName, buildMcpEntry, safeGet, detectAociBinary } from './host/util'
 import { safeLogger } from './host/logger'
@@ -48,7 +50,18 @@ export const apply = (ctx: Context, config?: AociConfig) => {
   const stateDir = joinStateDir()
 
   // ---- 证据账本 ----
-  const store = new EvidenceStore(stateDir)
+  const evidence = evidenceDir(stateDir)
+  try {
+    // 0.3.4 布局迁移：把旧版 state/aoci/projects.json|runs.jsonl 复制到 evidence/
+    if (!existsSync(join(evidence, 'projects.json')) && existsSync(join(stateDir, 'projects.json'))) {
+      mkdirSync(evidence, { recursive: true })
+      copyFileSync(join(stateDir, 'projects.json'), join(evidence, 'projects.json'))
+      try { copyFileSync(join(stateDir, 'runs.jsonl'), join(evidence, 'runs.jsonl')) } catch { /* ignore */ }
+    }
+  } catch { /* 迁移失败不阻塞 */ }
+  // 启动时做一次 tmp 清理（TTL 7 天 + 200MB 上限）
+  void sweepTmp(stateDir).then((r) => { if (r.removed) safeLogger(ctx).info('dsh-aoci: 已清理临时文件 ' + r.removed + ' 个（' + Math.round(r.bytes / 1024) + ' KB）') }).catch(() => undefined)
+  const store = new EvidenceStore(evidence)
 
   // ---- 二进制定位（配置优先，缺省自动探测） ----
   const resolveBinary = async (): Promise<string | undefined> => {

@@ -54,4 +54,5 @@ AOCI-CODE 提供持久化、Git 版本化、可治理的代码库/数据库认�
 - AOCI 只读源码与表结构，不读业务数据、不联网、不存凭据；面板仅 loopback。
 - 不要修改 `aoci.txt`、`.aoci/` 等托管资产之外的内容来"保持认知一致"；托管维护是合法行为。
 - 用户明确禁止修改 aoci.txt/.aoci 时：不执行 Entry/Curation Apply，不前移 Baseline，不声称 aligned，如实报告 Stale。
+- 运行期文件统一放在插件状态目录 `state/aoci/`（`tmp/` 大结果与调试、`evidence/` 证据、`locks/`、`cache/`、`audit/`）；**不要写工作区或仓库**；临时脚本放 `%TEMP%` 并在结束前删除；可用 `/aoci --clean` 清理 tmp。
 - 维护后如修改了托管资产，提醒用户 `git commit`（认知随仓库版本化）。

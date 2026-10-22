@@ -13,6 +13,7 @@ export interface AociFlags {
   agent?: string
   db?: string
   skipScan?: boolean
+  clean?: boolean
 }
 export function parseAociInput(raw: string): AociFlags {
   const out: AociFlags = {}
@@ -22,6 +23,7 @@ export function parseAociInput(raw: string): AociFlags {
     if (t.startsWith('--')) {
       const key = t.slice(2)
       if (key === 'skip-scan') out.skipScan = true
+      else if (key === 'clean') out.clean = true
       else if (key === 'locale' || key === 'scope' || key === 'agent' || key === 'db') {
         const val = tokens[i + 1]
         if (val && !val.startsWith('--')) { (out as Record<string, string>)[key] = val; i++ }

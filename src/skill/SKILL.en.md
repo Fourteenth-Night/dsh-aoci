@@ -3,7 +3,7 @@ name: aoci-cognition
 description: Use when the user asks to understand or take over a codebase or system, establish or maintain repository cognition, or handle database table-level cognition. Implements the AOCI-CODE collaboration protocol for any MCP-capable coding agent: read and maintain a governed, Git-versioned cognition map through the nine aoci_* tools or the aggregate entry.
 license: MIT
 source: https://github.com/Fourteenth-Night/dsh-aoci
-version: 0.3.3
+version: 0.3.4
 ---
 
 # AOCI Cognition Collaboration Protocol (dsh-aoci)
@@ -56,4 +56,5 @@ Reload `aoci_rules`; declare `context_compaction` with an idempotent `refresh_ev
 - AOCI reads source and schema metadata only: no business data, no network egress, no stored credentials; any panel binds loopback only.
 - Do not modify anything outside the managed assets (aoci.txt / .aoci/) to "keep cognition consistent".
 - When the user forbids touching aoci.txt/.aoci/: do not apply entries/curation, do not advance the baseline, do not claim aligned; report Stale honestly.
+- Runtime files live under the plugin state directory `state/aoci/` (`tmp/` for oversized results and debug output, `evidence/`, `locks/`, `cache/`, `audit/`); never write them into the workspace or the repository; keep temporary scripts in `%TEMP%` and delete them when done; `/aoci --clean` clears `tmp/`.
 - After maintenance changes managed assets, remind the user to `git commit` (cognition is versioned with the repository).

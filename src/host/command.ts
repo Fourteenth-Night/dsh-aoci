@@ -5,6 +5,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { promises as fsP } from 'node:fs'
 import { join } from 'node:path'
 import { safeGet, resolveProjectPath, slugFromRoot, parseAociInput, detectAociBinary, humanizeAociError } from './util'
+import { cleanTmp } from './paths'
 import { isGitRepo, gitHead } from './workspace'
 import { installHint } from './aoci-bin'
 import { runAoci } from './cli'
@@ -63,11 +64,15 @@ export function installAociCommand(ctx: Context, deps: AociCommandDeps) {
   const spec = {
     name: 'aoci',
     description: '为指定 Git 仓库一键建立 AOCI 认知：init/scan + 绑定 MCP 桥，并让当前 AI 立即开始建索引',
-    input: { hint: '[路径] [--locale zh-CN] [--scope full] [--agent claude] [--skip-scan] [--db primary]' },
+    input: { hint: '[路径] [--locale zh-CN] [--scope full] [--agent claude] [--skip-scan] [--db primary] [--clean]' },
     handler: async ({ agent, rawInput }: { agent: CommandAgent; rawInput: string }): Promise<CommandResult> => {
       try {
-        if (deps.readOnly) return { kind: 'error', text: '只读模式：已禁止 init/scan/维护写操作。' }
         const flags = parseAociInput(rawInput ?? '')
+        if (flags.clean) {
+          const r = await cleanTmp(deps.stateDir ?? '')
+          return { kind: 'success', text: '已清理 AOCI 临时目录：删除 ' + r.removed + ' 个文件（' + Math.round(r.bytes / 1024) + ' KB）。' }
+        }
+        if (deps.readOnly) return { kind: 'error', text: '只读模式：已禁止 init/scan/维护写操作。' }
         const binary = (await deps.binaryPath()) ?? detectAociBinary()
         if (!binary) return { kind: 'error', text: installHint() }
         const ver = deps.verifyBinary ? await deps.verifyBinary() : undefined
@@ -150,6 +155,7 @@ export function installAociCommand(ctx: Context, deps: AociCommandDeps) {
             '建议先调用 aoci_cognition 的 action="validate" 本地预校验条目，再提交 update_entry。',
             'maintain 结果会自动附 E 档建议（行数→T/S/M/L）；质量优化可用 aoci_cognition action="optimize"（返回 review-required 批次）。',
             '新增/删除/重命名文件后，先跑无参 maintain（会为新增文件生成候选），再 update_entry；提交 attestation 前先单独提交 host_delivery_confirmation（version=overview-delivery-receipt/v1），并用 aoci_cognition action="attest" 预校验字段格式。',
+            '运行期文件统一写 ' + (deps.stateDir ?? '<stateDir>') + '\\tmp\\<slug>\\；临时脚本放 %TEMP% 并在结束前删除；不要写工作区或仓库。清理临时文件：/aoci --clean。',
             '工具可见性：优先 aoci_cognition（PTC/native 均可用）或 mcp__' + br.namespace + '__*；若两者都不在工具列表，使用随包脚本 scripts/aoci-mcp-driver.mjs（单进程完成 overview+attestation，临时输出写 state/aoci/tmp）。',
           ].join('\n')
           agent.steer(createUserMessage({

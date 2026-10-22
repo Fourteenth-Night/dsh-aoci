@@ -4,6 +4,7 @@
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { promises as fsP, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { persistOversized } from './persist'
+import { tmpStats, evidenceDir, cacheDir, locksDir, auditFile } from './paths'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { EvidenceStore } from './evidence'
@@ -87,6 +88,8 @@ function installToolsOn(ctx: Context, toolCtx: Context, deps: ToolDeps) {
       const ver = await deps.verifyBinary().catch(() => undefined)
       const header = 'binary=' + (binary ?? '未找到') + ' | version=' + (ver?.version ?? '?') + ' | sha256=' + (ver?.sha256 ? ver.sha256.slice(0, 16) + '…' : '?') + ' | verified=' + (ver?.ok ? 'ok' : 'NO(' + (ver?.reason ?? 'unknown') + ')') + ' | surface=' + deps.surface + ' | governance=' + deps.governance + ' | readOnly=' + deps.readOnly
       const toolsLine = 'registeredTools=' + registeredToolNames.length + ' [' + registeredToolNames.join(',') + ']'
+      const tmp = await tmpStats(deps.stateDir)
+      const layoutLine = 'layout: tmp=' + tmp.dir + ' (files=' + tmp.files + ', kb=' + Math.round(tmp.bytes / 1024) + ') | evidence=' + evidenceDir(deps.stateDir) + ' | cache=' + cacheDir(deps.stateDir) + ' | locks=' + locksDir(deps.stateDir) + ' | audit=' + auditFile(deps.stateDir)
       const lines = projects.map((p) => {
         const head = gitHead(p.root)
         const dirty = gitDirty(p.root)
@@ -99,7 +102,7 @@ function installToolsOn(ctx: Context, toolCtx: Context, deps: ToolDeps) {
           'workingDirty=' + dirty, 'boundTools=' + (bound.length ? bound.join(',') : '-'),
         ].join(' | ')
       }).join('\n') || '(暂无项目)'
-      return [header, toolsLine, lines].join('\n')
+      return [header, toolsLine, layoutLine, lines].join('\n')
     },
   }))
 

@@ -26,9 +26,10 @@ export async function verifyAociBinary(
   } catch {
     return { ok: false, path, reason: '二进制不存在: ' + path }
   }
-  const cacheFile = join(opts.stateDir, 'binary.json')
+  const cacheFile = join(opts.stateDir, 'cache', 'binary.json')
+  const legacyCache = join(opts.stateDir, 'binary.json')
   let cache: { path?: string; mtimeMs?: number; size?: number; sha256?: string; version?: string } | undefined
-  try { cache = JSON.parse(await fs.readFile(cacheFile, 'utf8')) } catch { cache = undefined }
+  try { cache = JSON.parse(await fs.readFile(cacheFile, 'utf8')) } catch { try { cache = JSON.parse(await fs.readFile(legacyCache, 'utf8')) } catch { cache = undefined } }
   const cacheHit = cache && cache.path === path && cache.mtimeMs === st.mtimeMs && cache.size === st.size && cache.sha256
 
   let sha256 = cacheHit ? cache!.sha256 : undefined
@@ -38,7 +39,7 @@ export async function verifyAociBinary(
     const out = await runAoci(ctx, { argv: [path, '--version'], timeoutMs: 20000 })
     version = parseAociVersion((out.stdout || '') + '\n' + (out.stderr || ''))
     try {
-      await fs.mkdir(opts.stateDir, { recursive: true })
+      await fs.mkdir(join(opts.stateDir, 'cache'), { recursive: true })
       await fs.writeFile(cacheFile, JSON.stringify({ path, mtimeMs: st.mtimeMs, size: st.size, sha256, version, verifiedAt: new Date().toISOString() }, null, 2), 'utf8')
     } catch { /* 缓存写失败不阻塞 */ }
   }

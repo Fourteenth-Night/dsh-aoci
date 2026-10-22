@@ -1,6 +1,7 @@
 // 治理审计（方向 4）：结构化事件账本 + 可读报告（FRAS 溯源/漂移/时间线）
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
+import { auditFile } from './paths'
 
 export type AuditAction = 'bind' | 'unbind' | 'init' | 'scan' | 'maintain' | 'verify' | 'check' | 'refresh' | 'audit' | 'db_preflight' | 'cognition'
 
@@ -18,8 +19,9 @@ export interface AuditEvent {
 
 export async function appendAudit(stateDir: string, ev: AuditEvent): Promise<void> {
   try {
-    await fs.mkdir(stateDir, { recursive: true })
-    await fs.appendFile(join(stateDir, 'aoci-events.jsonl'), JSON.stringify(ev) + '\n', 'utf8')
+    const file = auditFile(stateDir)
+    await fs.mkdir(join(stateDir, 'audit'), { recursive: true })
+    await fs.appendFile(file, JSON.stringify(ev) + '\n', 'utf8')
   } catch {
     /* 审计写入失败不阻塞主流程 */
   }
@@ -27,7 +29,8 @@ export async function appendAudit(stateDir: string, ev: AuditEvent): Promise<voi
 
 export async function readAudit(stateDir: string, limit = 120): Promise<AuditEvent[]> {
   try {
-    const text = await fs.readFile(join(stateDir, 'aoci-events.jsonl'), 'utf8')
+    let text = ''
+    try { text = await fs.readFile(auditFile(stateDir), 'utf8') } catch { text = await fs.readFile(join(stateDir, 'aoci-events.jsonl'), 'utf8') }
     return text.split('\n').filter(Boolean).slice(-limit).map((l) => JSON.parse(l) as AuditEvent)
   } catch {
     return []

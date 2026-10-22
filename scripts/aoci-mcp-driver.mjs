@@ -34,7 +34,9 @@ if ((opt.args === '{}' || !opt.args) && pos.length > 1) opt.args = pos[1]
 if (opt.args && opt.args.startsWith('@')) opt.args = readFileSync(opt.args.slice(1), 'utf8')
 
 const dshHome = process.env.DSH_HOME || join(process.env.USERPROFILE || process.env.HOME || '.', '.dsh')
-const outDir = opt.outDir || join(dshHome, 'state', 'aoci', 'tmp')
+const profile = process.env.DSH_PROFILE
+const aociState = profile ? join(dshHome, 'profiles', profile, 'state', 'aoci') : join(dshHome, 'state', 'aoci')
+const outDir = opt.outDir || join(aociState, 'tmp')
 mkdirSync(outDir, { recursive: true })
 const stamp = Date.now()
 const aociBin = process.env.AOCI_BIN || 'C:/aoci/bin/aoci.exe'
@@ -89,7 +91,7 @@ const call = async (tool, args) => {
 const init = await request('initialize', {
   protocolVersion: '2025-06-18',
   capabilities: {},
-  clientInfo: { name: 'dsh-aoci-driver', version: '0.3.0' },
+  clientInfo: { name: 'dsh-aoci-driver', version: '0.3.4' },
 })
 if (init.error) { console.error('initialize failed: ' + JSON.stringify(init.error)); process.exit(1) }
 notify('notifications/initialized', {})
