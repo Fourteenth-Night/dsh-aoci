@@ -255,6 +255,7 @@ function installToolsOn(ctx: Context, toolCtx: Context, deps: ToolDeps) {
       if (rawAction === 'attest' || rawAction === 'attestation') {
         const payload = (((args as { args?: Record<string, unknown> }).args) ?? {}) as Record<string, unknown>
         const findings: string[] = []
+        const notes: string[] = []
         const hex64 = (v: unknown) => typeof v === 'string' && /^[0-9a-f]{64}$/i.test(v)
         const tagRe = /^[A-Z][A-Z][1-9][A-Z]?[A-Z]$/
         if (!hex64(payload.index_sha256)) findings.push('index_sha256 必须是 64 位十六进制')
@@ -270,14 +271,20 @@ function installToolsOn(ctx: Context, toolCtx: Context, deps: ToolDeps) {
             const id = String(a.object_identity ?? '')
             if (!id) findings.push('#' + (i + 1) + ' 缺少 object_identity')
             else if (id.includes('\\') || /^[A-Za-z]:/.test(id) || id.startsWith('/')) findings.push('#' + (i + 1) + ' object_identity 必须是仓库相对路径（用 / 分隔，如 src/host/tools.ts）')
-            else if (!id.includes('/')) findings.push('#' + (i + 1) + ' object_identity 看起来是裸文件名；请用仓库相对路径（如 src/host/tools.ts）')
+            else if (!id.includes('/')) notes.push('#' + (i + 1) + ' object_identity 为根目录文件名（' + id + '）；若确为仓库根文件则无需修改，否则请用仓库相对路径')
             if (!tagRe.test(String(a.tag ?? ''))) findings.push('#' + (i + 1) + ' tag 格式应为 A+B+C+[D]+E（如 EG7T）')
             if (!String(a.core_f ?? '').trim()) findings.push('#' + (i + 1) + ' core_f 缺失')
           })
         }
-        return findings.length
-          ? 'attest 预校验发现 ' + findings.length + ' 个问题：\n- ' + findings.join('\n- ') + '\n修正后重试；字段含义见 SKILL 第 2 节。'
-          : 'attest 预校验通过：sha256/entry_count/challenge 结构/object_identity 均符合契约，可提交。'
+        const dc = payload.host_delivery_confirmation as Record<string, unknown> | undefined
+        if (dc) {
+          if (String(dc.version ?? '') !== 'overview-delivery-receipt/v1') findings.push('host_delivery_confirmation.version 必须是 overview-delivery-receipt/v1')
+          notes.push('host_delivery_confirmation 必须单独一次调用提交（在 attestation 之前），与 attestation 合并会得到 host_delivery_incomplete')
+        }
+        const head = findings.length
+          ? 'attest 预校验发现 ' + findings.length + ' 个问题：\n- ' + findings.join('\n- ') + '\n'
+          : 'attest 预校验通过：sha256/entry_count/challenge 结构/object_identity 均符合契约，可提交。\n'
+        return head + (notes.length ? '提示：\n- ' + notes.join('\n- ') : '')
       }
       const tool = rawAction === 'optimize' ? 'aoci_maintain' : normalizeAociAction(rawAction)
       if (!tool) return '未知 action: ' + rawAction + '（可选：rules/overview/get_entries/search/maintain/update_entry/remove_entry/header/report/validate/optimize）'

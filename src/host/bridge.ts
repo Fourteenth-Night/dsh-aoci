@@ -31,20 +31,16 @@ interface BoundServer {
   retryTimer?: ReturnType<typeof setTimeout>
 }
 
-/** 把 MCP 工具结果（content 数组）整形为模型友好的短文本 */
-function shapeMcpResult(res: unknown): string {
+/** 提取 MCP 工具结果的原始正文（不压缩，供落盘/校验使用） */
+function mcpText(res: unknown): string {
   const r = res as { content?: unknown; isError?: boolean }
-  let text = ''
   const content = r.content
   if (Array.isArray(content)) {
-    text = content.map((c) => (c as { text?: string })?.text ?? '').join('')
-    if (!text) text = JSON.stringify(content)
-  } else if (typeof content === 'string') {
-    text = content
-  } else {
-    text = JSON.stringify(res)
+    const text = content.map((c) => (c as { text?: string })?.text ?? '').join('')
+    return text || JSON.stringify(content)
   }
-  return compactToolResult(text)
+  if (typeof content === 'string') return content
+  return JSON.stringify(res)
 }
 
 export class AociBridge {
@@ -84,7 +80,10 @@ export class AociBridge {
   /** 调用已绑定项目的 AOCI MCP 工具（供静态工具 aoci_cognition 使用） */
   /** 整形工具结果：超限时落盘并返回元数据，避免 6000 字符截断导致 attestation 无法完成 */
   private shapeResult(slug: string, tool: string, res: unknown): string {
-    const raw = shapeMcpResult(res)
+    const raw = mcpText(res)
+    // 关键顺序：先用原始正文判断大小；超限时落盘完整正文（body_sha256/bytes 描述的是原文），
+    // 只有未超限的小结果才做 compact 减速（避免大结果先被 6000 字符截断再落盘）。
+    if (raw.length <= TOOL_RESULT_LIMIT) return compactToolResult(raw)
     return persistOversized(this.stateDir, slug, tool, raw, TOOL_RESULT_LIMIT)
   }
 

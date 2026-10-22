@@ -4,6 +4,7 @@
 
 | 版本 | 主要内容 |
 |---|---|
+| 0.3.3 | ① **修复 0.3.1 截断修复的顺序 bug**：`shapeResult` 先取原始正文、再判断大小，超限时落盘完整正文（此前先被 `compactToolResult` 砍到 6000 再落盘，导致 `body_file/body_sha256` 描述的是残文本）；② `attest` 预校验不再把根目录文件（`.gitignore`/`cordis.patch.yml`/`vitest.config.ts`）误判为裸文件名（改为软提示）；③ 校验 `host_delivery_confirmation.version=overview-delivery-receipt/v1` 并提示必须单独一次调用；SKILL/steer 同步 |
 | 0.3.2 | ① `aoci_cognition action="attest"`：提交前本地预校验 attestation（sha256 格式 / entry_count / 10 条 challenge / object_identity 仓库相对路径 / tag / core_f），避免 3/10 重试；② `/aoci` steer 提示“新增文件后先 maintain”；③ SKILL 中英同步 |
 | 0.3.1 | ① **PTC 下大结果截断修复**：`persistOversized`（6000 字符阈值）同时用于静态 `aoci_cognition` 与动态 `mcp__aoci-*` 工具——超限时返回 `body_file/body_sha256/body_bytes/end_marker` + 预览，不再被 `compactToolResult` 截断；② **移除 `aoci_verify/check` 的“子进程服务未挂载”提前返回**，服务不可用时自动回退 node spawn；③ 语义审计修正：`index.ts` 缺省 `minAociVersion` rc18→rc21、`aoci-bin.ts` 提示版本 rc21、`postbuild.mjs` 同时拷贝 `SKILL.en.md`；④ SKILL/steer 明确 attestation 的 object_identity 用仓库相对路径 |
 | 0.3.0 | **零依赖 MCP 客户端**：新增 `src/host/mcp-client.ts`（原生 JSON-RPC over stdio，全管道 + windowsHide），bridge 改用它，**移除 `@modelcontextprotocol/sdk` 运行时依赖**（连带 4.3MB sdk + 5.9MB zod 不再需要，profile 安装期模块解析失败/私有子进程取用/console 句柄继承问题一并消除）；工具面与协议行为不变；集成测试（bind/工具/query）通过 |
