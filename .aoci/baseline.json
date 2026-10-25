@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-10-18T16:49:29Z",
-  "updated_at": "2026-10-22T11:46:15Z",
+  "updated_at": "2026-10-25T14:49:34Z",
   "files": {
     ".gitattributes": {
       "role": "index",
@@ -47,15 +47,15 @@
     },
     "RELEASE.md": {
       "role": "index",
-      "sha256": "ddc460232bc86e114e83695876e632ba322932b28eb92db34d2bce27fb951a7c",
-      "size": 11588,
-      "normalized_sha256": "ddc460232bc86e114e83695876e632ba322932b28eb92db34d2bce27fb951a7c"
+      "sha256": "22d4d4a36a98de96b751468a7e6d6fc51c50bc6fd1cd755744e12c7d87a72b42",
+      "size": 12083,
+      "normalized_sha256": "22d4d4a36a98de96b751468a7e6d6fc51c50bc6fd1cd755744e12c7d87a72b42"
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "37b3e09bafb82ca4a7610326a7032794acc8953f5e592bccf2f227b997812c3a",
-      "size": 15579,
-      "normalized_sha256": "37b3e09bafb82ca4a7610326a7032794acc8953f5e592bccf2f227b997812c3a"
+      "sha256": "9515e9baeec629d8f19349db5569ecc5db407ca2b29f7fa6733d3d752765899d",
+      "size": 15647,
+      "normalized_sha256": "9515e9baeec629d8f19349db5569ecc5db407ca2b29f7fa6733d3d752765899d"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -89,15 +89,15 @@
     },
     "dsh.plugin.json": {
       "role": "index",
-      "sha256": "bc5a9f554a94798be674dddbc1c7955a6332153d4e7e5d921b32d5fab63b2659",
+      "sha256": "9dd5448220fddb173a8536052b96730a4bc67752742c6a3a31476eba73af9b43",
       "size": 422,
-      "normalized_sha256": "bc5a9f554a94798be674dddbc1c7955a6332153d4e7e5d921b32d5fab63b2659"
+      "normalized_sha256": "9dd5448220fddb173a8536052b96730a4bc67752742c6a3a31476eba73af9b43"
     },
     "package.json": {
       "role": "index",
-      "sha256": "956f6d35a3a02f8d0c937261d8a73aa0e75f48fcec4b35023e980aca19b26aec",
+      "sha256": "6ac0064d18ea8fb88a6a3f6a813dbdb798160a439578909a0536368a8d01b21f",
       "size": 3485,
-      "normalized_sha256": "956f6d35a3a02f8d0c937261d8a73aa0e75f48fcec4b35023e980aca19b26aec"
+      "normalized_sha256": "6ac0064d18ea8fb88a6a3f6a813dbdb798160a439578909a0536368a8d01b21f"
     },
     "pnpm-lock.yaml": {
       "role": "index",
@@ -233,9 +233,9 @@
     },
     "src/host/persist.ts": {
       "role": "index",
-      "sha256": "f7d0868dcccc9b1dd442349731a1f329634077b4d68face49026312ac910190e",
-      "size": 1865,
-      "normalized_sha256": "f7d0868dcccc9b1dd442349731a1f329634077b4d68face49026312ac910190e"
+      "sha256": "e66480cfb0f0b7af35528b950a01bdba5cbf0b09ed9813099f7aef96c57e5164",
+      "size": 1921,
+      "normalized_sha256": "e66480cfb0f0b7af35528b950a01bdba5cbf0b09ed9813099f7aef96c57e5164"
     },
     "src/host/refresh.ts": {
       "role": "index",
@@ -299,9 +299,9 @@
     },
     "src/skill/SKILL.en.md": {
       "role": "index",
-      "sha256": "c0bc23b90d04a34bcda3990ef62aa3548753c8763e5334502926479c74fc5355",
+      "sha256": "8cf00c4b4c6707866af94910db8504fd1a564382b96b2a418503873b32944eea",
       "size": 6499,
-      "normalized_sha256": "c0bc23b90d04a34bcda3990ef62aa3548753c8763e5334502926479c74fc5355"
+      "normalized_sha256": "8cf00c4b4c6707866af94910db8504fd1a564382b96b2a418503873b32944eea"
     },
     "src/skill/SKILL.md": {
       "role": "index",
@@ -327,6 +327,12 @@
       "size": 5731,
       "normalized_sha256": "a681ec1d395f8efbbf81a0c36464cf41ed990163b668af5c7c2829e6ea7775ca"
     },
+    "test/persist.test.ts": {
+      "role": "observe",
+      "sha256": "fd7fe735fff9ae3f1710aa4972ebcc4c56fe852e60f2a45a4f9cf3c1f4b39995",
+      "size": 2280,
+      "normalized_sha256": "fd7fe735fff9ae3f1710aa4972ebcc4c56fe852e60f2a45a4f9cf3c1f4b39995"
+    },
     "test/util.test.ts": {
       "role": "observe",
       "sha256": "78d9df3cd4a5c3d7c586aff5e12a1a430da917cc87e80fec7c188952be93dee4",
@@ -335,9 +341,9 @@
     },
     "tsconfig.json": {
       "role": "index",
-      "sha256": "4b4ff9a48339579c5cc06d8c752f2d2d1dc2f09ec4cb850b1f874741e623371c",
-      "size": 429,
-      "normalized_sha256": "4b4ff9a48339579c5cc06d8c752f2d2d1dc2f09ec4cb850b1f874741e623371c"
+      "sha256": "624fa34faaa36802dc875b4133c335ca973b214eaeb6b1897c5e8f0c520d08d3",
+      "size": 464,
+      "normalized_sha256": "624fa34faaa36802dc875b4133c335ca973b214eaeb6b1897c5e8f0c520d08d3"
     },
     "tsdown.config.ts": {
       "role": "index",

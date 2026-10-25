@@ -4,6 +4,7 @@
 
 | 版本 | 主要内容 |
 |---|---|
+| 0.3.5 | **修复 tmp 清理死代码**：`persist.ts` 的机会式 `sweepTmp` 原先写在 `return` 之后（永不执行，TTL/配额清理实际从未运行）→ 移到 return 之前；`tsconfig.json` 增加 `allowUnreachableCode: false` 防回归；新增 `test/persist.test.ts` 3 条回归测试（清理执行+10 分钟节流、落盘完整正文、小结果原样返回）；`pnpm check` 全绿 **36 tests**；索引重新治理：E 档 4→0、51/51 entries、aligned、attest 10/10 |
 | 0.3.4 | **运行期目录收敛**：所有状态统一到 `state/aoci/`（`tmp/<slug>/` 大结果与调试、`evidence/` 证据账本、`locks/`、`cache/`、`audit/`），旧路径自动迁移/回退；`tmp` 增加 TTL（7 天）+ 配额（200MB）自动清理；`aoci_status` 输出布局与 tmp 统计；`/aoci --clean` 一键清理；steer/SKILL 明确“不要写工作区/仓库，临时脚本放 %TEMP% 并删除” |
 | 0.3.3 | ① **修复 0.3.1 截断修复的顺序 bug**：`shapeResult` 先取原始正文、再判断大小，超限时落盘完整正文（此前先被 `compactToolResult` 砍到 6000 再落盘，导致 `body_file/body_sha256` 描述的是残文本）；② `attest` 预校验不再把根目录文件（`.gitignore`/`cordis.patch.yml`/`vitest.config.ts`）误判为裸文件名（改为软提示）；③ 校验 `host_delivery_confirmation.version=overview-delivery-receipt/v1` 并提示必须单独一次调用；SKILL/steer 同步 |
 | 0.3.2 | ① `aoci_cognition action="attest"`：提交前本地预校验 attestation（sha256 格式 / entry_count / 10 条 challenge / object_identity 仓库相对路径 / tag / core_f），避免 3/10 重试；② `/aoci` steer 提示“新增文件后先 maintain”；③ SKILL 中英同步 |
