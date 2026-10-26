@@ -1,6 +1,13 @@
 # dsh-aoci
 
+[![npm version](https://img.shields.io/npm/v/dsh-aoci?color=cb3837&logo=npm)](https://www.npmjs.com/package/dsh-aoci)
+[![license](https://img.shields.io/github/license/Fourteenth-Night/dsh-aoci)](LICENSE)
+[![latest release](https://img.shields.io/github/v/release/Fourteenth-Night/dsh-aoci?label=release)](https://github.com/Fourteenth-Night/dsh-aoci/releases/latest)
+[![tests](https://img.shields.io/badge/tests-36%20passed-brightgreen)](https://github.com/Fourteenth-Night/dsh-aoci/actions)
+
 **面向 DeepSeek Harness 的 AOCI-CODE 认知层：一条斜杠命令即可让 AI 获得受治理、Git 版本化的仓库与数据库认知。**
+
+**最新发布：[v0.3.5](https://github.com/Fourteenth-Night/dsh-aoci/releases/latest)**（汇总 v0.2.2 → v0.3.5）· **npm：[dsh-aoci@0.3.5](https://www.npmjs.com/package/dsh-aoci)**
 
 [English](README.md) | **简体中文**
 
@@ -21,7 +28,7 @@ AOCI-CODE 采用 FSL-1.1-MIT（source-available）；本插件**不捆绑**其�
 - **实测运行环境**：DSH 0.2.0-rc.2（harness 运行时 `^0.2.0-rc.2`，cordis `^4.0.4`）；web profile。
 - **Peer 依赖**（宿主提供）：`@deepseek-ai/cordis`、`dsh-settings`、`dsh-system-prompt`、`dsh-tools`、`dsh-jobs`、`dsh-llm`、`react`、`react-dom`。
 - **运行时依赖**：仅 `schemastery`；MCP stdio 客户端已内置（零 SDK 依赖）。
-- **前置二进制**：官方 AOCI-CODE Release 的 `aoci`（默认 `C:/aoci/bin/aoci.exe`），SHA-256 + 最低版本（`minAociVersion`，默认 `0.1.0-rc18`；上游最新 rc21）校验。
+- **前置二进制**：官方 AOCI-CODE Release 的 `aoci`（默认 `C:/aoci/bin/aoci.exe`），SHA-256 + 最低版本（`minAociVersion`，默认 `0.1.0-rc21`；Volumes v1 需 rc21+）校验。
 
 ## 模型可见面
 
@@ -34,10 +41,10 @@ AOCI-CODE 采用 FSL-1.1-MIT（source-available）；本插件**不捆绑**其�
 | 刷新 | `aoci_refresh` | 计算上次维护 HEAD 以来的 git 变更集，给出分批增量维护指令 |
 | 审计 | `aoci_audit` | verify/check + HEAD 漂移 + 结构化事件时间线 |
 | 构建状态 | `aoci_build_status` | 最近构建/维护/验证记录与绑定 |
-| 静态认知入口 | `aoci_cognition { action, project?, path?, args? }` | PTC/native 均可用（加载时注册 + 懒绑定）；支持 `action="validate"` 本地预校验条目（F≤160、R≤360/8 项、A≤400/6 项、S 按重要度档） |
+| 静态认知入口 | `aoci_cognition { action, project?, path?, args? }` | PTC/native 均可用（加载时注册 + 懒绑定）；支持 `validate`（条目预校验）、`attest`（attestation 字段预校验）、`optimize` 动作（F≤160、R≤360/8 项、A≤400/6 项、S 按重要度档） |
 | 系统查询 | `aoci_query {kind}`(compact) 或 `aoci_relations`/`aoci_impact`/`aoci_lineage`/`aoci_db`(full) | 依赖投影/影响分析/来源链/数据库预检 |
 | 质量优化 | `aoci_cognition { action: "optimize" }` | 以 `intent=cognition_optimization` 运行 maintain，返回质量优化批次（E 档 / R-S token 目标） |
-| 兜底驱动 | `scripts/aoci-mcp-driver.mjs` | 随包脚本：单进程执行一个工具或步骤序列（overview+attestation 必须同进程），输出写 `state/aoci/tmp`，支持 `--clean` |
+| 兜底驱动 | `scripts/aoci-mcp-driver.mjs` | 随包零依赖 JSON-RPC 驱动：单进程执行一个工具、步骤序列或预设（`read`/`overview`/`maintain`/`optimize`），overview+attestation 必须同进程；支持 `--args-file`、`--clean`，输出写 `state/aoci/tmp/<slug>/` |
 | 自主选路 | `aoci_use`、`aoci_unbind` | 按需绑定/解绑仓库 |
 | 斜杠命令 | `/aoci [路径]` | 一键接入（校验 + 绑定 + 指示建索引） |
 
@@ -47,9 +54,10 @@ AOCI-CODE 采用 FSL-1.1-MIT（source-available）；本插件**不捆绑**其�
 2. **动态 MCP 桥**：以**清洗后的环境**拉起 `aoci --repo <root> mcp`，stdio 连接并注册工具；解绑注销并终止进程；退出/调用失败 2s 退避重连。
 3. **确定性执行**：优先 `ctx.subprocess` 受管进程（env 清洗、grace 终止、有界输出），缺失时降级 `node:child_process`。
 4. **治理语义**：init 仅未初始化仓库（探测 `aoci.txt`）；scan 仅无基线时（探测 `.aoci/baseline.json`）；维护走无参 `aoci_maintain` + 整批 `aoci_update_entry`，`verify`/`check` 证明 aligned；verify 成功记录维护基线 HEAD，驱动 `aoci_refresh` 漂移检测。
-5. **Token/预算工程**：compact 工具面；结果整形截断 + receipt 指针；压缩钩子折叠 AOCI 正文为单条 receipt，并在 `ctx.tokenMeter` 可用时按压力升级恢复提示（fold → fold+compact）。
+5. **Token/预算工程**：compact 工具面；结果整形，超限结果落盘到 `state/aoci/tmp/<slug>/` 并返回 `body_file`/`body_sha256`/`body_bytes`/`end_marker` 元数据（不再盲目截断）；压缩钩子折叠 AOCI 正文为单条 receipt，并在 `ctx.tokenMeter` 可用时按压力升级恢复提示（fold → fold+compact）。
 6. **二进制安全**：SHA-256 + 最低版本校验 + 校验缓存；不匹配时阻止绑定并给出可操作提示。
 7. **最小权限**：子进程环境白名单（系统变量 + `AOCI_DB_*` + 显式 `envPassthrough`）；`readOnly` 禁止写操作；`/aoci/api` 默认关闭。
+8. **运行期文件**：统一落在 `<DSH_HOME>/state/aoci/`（`tmp/<slug>/`、`evidence/`、`locks/`、`cache/`、`audit/`），7 天 TTL + 200MB 配额，`/aoci --clean` 可清理；受管认知资产（`aoci.txt` 等）仍在仓库内并随 Git 版本化。
 
 ## 安装
 
@@ -58,7 +66,14 @@ AOCI-CODE 采用 FSL-1.1-MIT（source-available）；本插件**不捆绑**其�
 - DSH 0.2.0-rc.2 profile（desktop 或 web）。
 - 官方 Release 的 `aoci` 二进制（如 `aoci_0.1.0-rc21_windows_amd64.zip`），按 `SHA256SUMS` 校验后放到稳定绝对路径（默认 `C:/aoci/bin/aoci.exe`）。
 
-### 步骤
+### 从 npm 安装（推荐）
+
+```powershell
+dsh plugin --profile <name> add dsh-aoci
+# 重启 DSH Desktop
+```
+
+### 从源码安装
 
 ```powershell
 cd <plugin-checkout>
@@ -70,6 +85,18 @@ dsh plugin --profile <name> add ./dsh-aoci-<version>.tgz
 #   /aoci D:\path\to\repo   （绝对路径）
 #   /aoci                     （自动定位当前工作区）
 ```
+
+## 运行期目录
+
+所有运行期状态位于 `<DSH_HOME>/state/aoci/`（按 profile 区分）：
+
+- `tmp/<slug>/` —— 大结果正文与调试输出；7 天 TTL + 200MB 配额，`/aoci --clean` 清理；
+- `evidence/` —— `projects.json` / `runs.jsonl`；
+- `locks/` —— 仓库级写锁；
+- `cache/` —— 二进制校验缓存；
+- `audit/` —— `aoci-events.jsonl`。
+
+受管认知资产（`aoci.txt`、`aoci.*.txt`、`.aoci/`）留在仓库内并随 Git 版本化；不要把运行期文件写进工作区或仓库。
 
 ## 配置项
 
@@ -91,8 +118,8 @@ dsh plugin --profile <name> add ./dsh-aoci-<version>.tgz
 
 ## 验证方法
 
-1. **单元测试 28 例**：slug/凭据派生、cron、压缩折叠与预算策略、审计报告、刷新计划、环境白名单、工具面估算、配置默认值；
-2. **端到端链路**（真实 rc18 二进制 + Git 仓库 + MCP SDK）：init/scan/verify、九工具发现、`aoci_header`；
+1. **单元测试 36 例（5 个文件）**：slug/凭据派生、cron、压缩折叠与预算策略、审计报告、刷新计划、环境白名单、工具面估算、配置默认值，以及大结果落盘回归（清理执行+节流、完整正文落盘、小结果原样返回）；
+2. **端到端链路**（真实 rc21 二进制 + Git 仓库 + 内置 MCP 客户端）：init/scan/verify、九工具发现、`aoci_header`、overview → delivery confirmation → attestation 10/10；
 3. **集成自测**（真实 Cordis）：`/aoci` 带参/无参、compact 面 2/2 工具、status 含二进制校验、`aoci_query`、`aoci_refresh`、`aoci_audit`、`aoci_build_status`、解绑；
 4. **组合加载**：`dsh --profile web --dump-config` 正常解析。
 
