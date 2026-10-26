@@ -122,7 +122,7 @@ export class AociBridge {
         args: ['--repo', root, 'mcp'],
         env: sanitizedEnv(),
         clientName: 'dsh-aoci',
-        clientVersion: '0.3.0',
+        clientVersion: '0.3.6',
       })
       await client.connect()
       await client.listTools()

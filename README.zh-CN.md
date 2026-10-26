@@ -7,7 +7,7 @@
 
 **面向 DeepSeek Harness 的 AOCI-CODE 认知层：一条斜杠命令即可让 AI 获得受治理、Git 版本化的仓库与数据库认知。**
 
-**最新发布：[v0.3.5](https://github.com/Fourteenth-Night/dsh-aoci/releases/latest)**（汇总 v0.2.2 → v0.3.5）· **npm：[dsh-aoci@0.3.5](https://www.npmjs.com/package/dsh-aoci)**
+**最新发布：[v0.3.6](https://github.com/Fourteenth-Night/dsh-aoci/releases/latest)**（汇总 v0.2.2 → v0.3.6）· **npm：[dsh-aoci@0.3.6](https://www.npmjs.com/package/dsh-aoci)**
 
 [English](README.md) | **简体中文**
 

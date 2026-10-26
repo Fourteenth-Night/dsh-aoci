@@ -7,7 +7,7 @@
 
 **AOCI-CODE cognition layer for DeepSeek Harness: one slash command gives agents governed, Git-versioned repository and database cognition.**
 
-**Latest release: [v0.3.5](https://github.com/Fourteenth-Night/dsh-aoci/releases/latest)** (aggregates v0.2.2 → v0.3.5) · **npm: [dsh-aoci@0.3.5](https://www.npmjs.com/package/dsh-aoci)**
+**Latest release: [v0.3.6](https://github.com/Fourteenth-Night/dsh-aoci/releases/latest)** (aggregates v0.2.2 → v0.3.6) · **npm: [dsh-aoci@0.3.6](https://www.npmjs.com/package/dsh-aoci)**
 
 **简体中文版见 [README.zh-CN.md](README.zh-CN.md).**
 
